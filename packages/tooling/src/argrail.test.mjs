@@ -4,8 +4,8 @@ import { mkdtemp, mkdir, writeFile, readFile, rename, rm, symlink } from 'node:f
 import { resolve } from 'node:path'
 import { tmpdir } from 'node:os'
 
-const root = resolve(import.meta.dir, '..')
-const tooling = resolve(root, 'packages/tooling/src/argrail.mjs')
+const root = resolve(import.meta.dir, '../../..')
+const tooling = resolve(import.meta.dir, 'argrail.mjs')
 
 function run(command, args, cwd) {
   return new Promise((resolveResult, reject) => {

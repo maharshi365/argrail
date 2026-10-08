@@ -1,5 +1,5 @@
 import { test, expect } from 'bun:test'
-import { bindCommand, createCLI, createFileCommand, defineCommand, flag, integer, option, positional, string } from '../packages/core/src/index.ts'
+import { bindCommand, createCLI, createFileCommand, defineCommand, flag, integer, option, positional, string } from './index.ts'
 
 test('option values cannot become child route parameters', async () => {
   const parent = createFileCommand('/run')({ options: { label: option(string(), { short: 'l' }) }, run: ({ options }) => options.label })

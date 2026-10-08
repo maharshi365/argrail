@@ -1,4 +1,4 @@
-import { bindCommand, createFileCommand, createCLI, defineRegistry, choice, flag, integer, option, positional, string } from '../../packages/core/src/index.ts'
+import { bindCommand, createFileCommand, createCLI, defineRegistry, choice, flag, integer, option, positional, string } from './index.ts'
 
 const remove = createFileCommand('/users/$userId/delete')({
   params: { userId: positional(integer({ min: 1 })) },

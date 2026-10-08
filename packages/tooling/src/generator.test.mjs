@@ -2,7 +2,7 @@ import { describe, test, expect } from 'bun:test'
 import { mkdtemp, mkdir, writeFile, readFile, rename, rm, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { resolve } from 'node:path'
-import { commandPath, discover, generate, loadConfig, addCommand } from '../packages/tooling/src/generator.mjs'
+import { commandPath, discover, generate, loadConfig, addCommand } from './generator.mjs'
 
 async function project(run) {
   const root = await mkdtemp(resolve(process.env.TEMP ? resolve(process.env.TEMP, 'opencode') : tmpdir(), 'argrail-test-'))

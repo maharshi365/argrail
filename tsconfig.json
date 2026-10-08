@@ -10,5 +10,5 @@
     "noEmit": true,
     "skipLibCheck": false
   },
-  "include": ["packages/core/src/**/*.ts", "tests/types/**/*.ts"]
+  "include": ["packages/core/src/**/*.ts"]
 }
