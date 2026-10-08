@@ -1,5 +1,5 @@
-import type { Argument, NamedArgument } from './values.ts'
-import { ValidationError } from './values.ts'
+import type { Argument, NamedArgument, StandardSchema } from './values.ts'
+import { ValidationError, value, positional, option } from './values.ts'
 import type { CommandContext } from './context.ts'
 
 export type ParamNames<Path extends string> =
@@ -32,6 +32,8 @@ export interface Command<Path extends string | undefined, Params extends Argumen
 export type AnyDefinition = Omit<Command<string | undefined, any, any, any, any, any>, 'run' | 'args'> & {
   readonly args: readonly NamedArgument[]
   readonly run: ((input: any) => any) | undefined
+  readonly validateParams?: ObjectSchema | undefined
+  readonly validateOptions?: ObjectSchema | undefined
 }
 export type AnyCommand = AnyDefinition & { readonly path: string }
 type Group<P extends string | undefined, A extends Arguments, O extends Arguments, Args extends readonly NamedArgument[]> = Omit<Command<P, A, O, never, Args>, 'run'> & { readonly run: undefined }
@@ -50,13 +52,129 @@ type Configuration<P extends string, A extends Arguments, O extends Arguments, A
   ? { params?: A & Record<Exclude<keyof A, ParamNames<P>>, never> }
   : { params: A & Record<Exclude<keyof A, ParamNames<P>>, never> })
 
+// Standard Schema validators receive untrusted object bags; concrete schemas retain their own input and output types.
+// oxlint-disable-next-line deslop/no-unsafe-dictionary-type
+type ObjectSchema = StandardSchema<Record<string, unknown>, Record<string, unknown>>
+type SchemaInput<S> = S extends StandardSchema<infer I, unknown> ? I : {}
+type SchemaOutput<S> = S extends StandardSchema<unknown, infer O> ? O : {}
+export interface OptionSettings {
+  readonly type?: 'value' | 'flag'
+  readonly short?: string
+  readonly description?: string
+  readonly negate?: boolean
+}
+export type OptionConfig<Input> = { [K in keyof Input]-?: OptionSettings }
+type SchemaParams<S> = { [K in keyof SchemaInput<S>]: Argument<unknown, true, 'positional'> }
+type SchemaOptions<S> = { [K in keyof SchemaInput<S>]: Argument<unknown, false, 'option' | 'flag'> }
+type SchemaConfig<
+  P extends string | undefined,
+  PS,
+  OS,
+  A extends Arguments,
+  O extends Arguments,
+  Args extends readonly NamedArgument[],
+> = {
+  description?: string
+  args?: Args
+  sections?: readonly Section[]
+} & (PS extends ObjectSchema
+  ? {
+      validateParams: PS
+      params?: never
+    } & (P extends string
+      ? {
+          validateParams: PS &
+            (
+              | Exclude<ParamNames<P>, keyof SchemaInput<PS>>
+              | Exclude<keyof SchemaInput<PS>, ParamNames<P>> extends never
+              ? unknown
+              : never)
+        }
+      : {})
+  : { validateParams?: never } & (P extends string
+      ? Pick<Configuration<P, A, O, Args>, 'params'>
+      : { params?: A })) &
+  (OS extends ObjectSchema
+    ? {
+        validateOptions: OS
+        optionConfig: OptionConfig<SchemaInput<OS>>
+        options?: never
+      }
+    : { validateOptions?: never; optionConfig?: never; options?: O }) &
+  ({ validateParams: ObjectSchema } | { validateOptions: ObjectSchema })
+type SchemaHandler<
+  PS,
+  OS,
+  A extends Arguments,
+  O extends Arguments,
+  Args extends readonly NamedArgument[],
+  Services,
+  R,
+> = (input: {
+  params: PS extends ObjectSchema ? SchemaOutput<PS> : Output<A>
+  options: OS extends ObjectSchema ? SchemaOutput<OS> : Output<O>
+  args: Output<ArgumentMap<Args>>
+  ctx: CommandContext<Services>
+}) => R
+type SchemaCommand<
+  P extends string | undefined,
+  PS,
+  OS,
+  A extends Arguments,
+  O extends Arguments,
+  Args extends readonly NamedArgument[],
+  Services,
+  R,
+> = Omit<
+  Command<
+    P,
+    PS extends ObjectSchema ? SchemaParams<PS> : A,
+    OS extends ObjectSchema ? SchemaOptions<OS> : O,
+    R,
+    Args,
+    Services
+  >,
+  'run'
+> & {
+  readonly validateParams: PS
+  readonly validateOptions: OS
+  readonly run: SchemaHandler<PS, OS, A, O, Args, Services, R>
+}
+
 export function createFileCommand<const Path extends string>(path: Path) {
+  function file<
+    PS extends ObjectSchema | undefined = undefined,
+    OS extends ObjectSchema | undefined = undefined,
+    const Params extends RouteParams<Path> = RouteParams<Path>,
+    const Options extends OptionDefinitions = {},
+    const Args extends readonly NamedArgument[] = [],
+    Result = unknown,
+  >(
+    config: SchemaConfig<Path, PS, OS, Params, Options, Args> & {
+      run: SchemaHandler<PS, OS, Params, Options, Args, {}, Result>
+    },
+  ): SchemaCommand<Path, PS, OS, Params, Options, Args, {}, Result>
+  function file<
+    PS extends ObjectSchema | undefined = undefined,
+    OS extends ObjectSchema | undefined = undefined,
+    const Params extends RouteParams<Path> = RouteParams<Path>,
+    const Options extends OptionDefinitions = {},
+    const Args extends readonly NamedArgument[] = [],
+  >(
+    config: SchemaConfig<Path, PS, OS, Params, Options, Args> & { run?: never },
+  ): Omit<SchemaCommand<Path, PS, OS, Params, Options, Args, {}, never>, 'run'> & {
+    readonly run: undefined
+  }
+  function file<
+    const Params extends RouteParams<Path> = RouteParams<Path>,
+    const Options extends OptionDefinitions = {},
+    const Args extends readonly NamedArgument[] = [],
+  >(
+    config: Configuration<Path, Params, Options, Args> & { run?: never },
+  ): Group<Path, Params, Options, Args>
   function file<const Params extends RouteParams<Path> = RouteParams<Path>, const Options extends OptionDefinitions = {}, const Args extends readonly NamedArgument[] = [], Result = unknown>(
     config: Configuration<Path, Params, Options, Args> & { run: Handler<Params, Options, Args, {}, Result> },
   ): Command<Path, Params, Options, Result, Args>
-  function file<const Params extends RouteParams<Path> = RouteParams<Path>, const Options extends OptionDefinitions = {}, const Args extends readonly NamedArgument[] = []>(
-    config: Configuration<Path, Params, Options, Args> & { run?: never },
-  ): Group<Path, Params, Options, Args>
   function file(config: RuntimeConfig): AnyCommand {
     return build(path, config) as AnyCommand
   }
@@ -64,6 +182,29 @@ export function createFileCommand<const Path extends string>(path: Path) {
 }
 
 function author<Services>() {
+  function definition<
+    PS extends ObjectSchema | undefined = undefined,
+    OS extends ObjectSchema | undefined = undefined,
+    const Params extends Positionals = {},
+    const Options extends OptionDefinitions = {},
+    const Args extends readonly NamedArgument[] = [],
+    Result = unknown,
+  >(
+    config: SchemaConfig<undefined, PS, OS, Params, Options, Args> & {
+      run: SchemaHandler<PS, OS, Params, Options, Args, Services, Result>
+    },
+  ): SchemaCommand<undefined, PS, OS, Params, Options, Args, Services, Result>
+  function definition<
+    PS extends ObjectSchema | undefined = undefined,
+    OS extends ObjectSchema | undefined = undefined,
+    const Params extends Positionals = {},
+    const Options extends OptionDefinitions = {},
+    const Args extends readonly NamedArgument[] = [],
+  >(
+    config: SchemaConfig<undefined, PS, OS, Params, Options, Args> & { run?: never },
+  ): Omit<SchemaCommand<undefined, PS, OS, Params, Options, Args, Services, never>, 'run'> & {
+    readonly run: undefined
+  }
   function definition<const Params extends Positionals = {}, const Options extends OptionDefinitions = {}, const Args extends readonly NamedArgument[] = [], Result = unknown>(
     config: DefinitionConfig<Params, Options, Args> & { run: Handler<Params, Options, Args, Services, Result> },
   ): Command<undefined, Params, Options, Result, Args, Services>
@@ -76,19 +217,85 @@ function author<Services>() {
 
 export const defineCommand = Object.assign(author<{}>(), { withContext: author })
 
-type RuntimeConfig = DefinitionConfig<Arguments, Arguments, readonly NamedArgument[]> & { run?: (input: any) => any }
+type RuntimeConfig = DefinitionConfig<Arguments, Arguments, readonly NamedArgument[]> & {
+  run?: (input: any) => any
+  validateParams?: ObjectSchema
+  validateOptions?: ObjectSchema
+  optionConfig?: Record<string, OptionSettings>
+}
 function build(path: string | undefined, config: RuntimeConfig): AnyDefinition {
-  const params = config.params ?? {}
-  const options = config.options ?? {}
+  if (config.validateParams && config.params)
+    throw new ValidationError('params and validateParams cannot be combined')
+  if (config.validateOptions && config.options)
+    throw new ValidationError('options and validateOptions cannot be combined')
+  if (config.validateOptions && !config.optionConfig)
+    throw new ValidationError('validateOptions requires optionConfig')
+  if (config.optionConfig && !config.validateOptions)
+    throw new ValidationError('optionConfig requires validateOptions')
+  const raw = value('text', { parse: text => text, validate: input => input })
+  const params = config.validateParams
+    ? Object.fromEntries(
+        (path === undefined ? [] : pathSegments(path))
+          .filter(segment => segment.startsWith('$'))
+          .map(segment => [segment.slice(1), positional(raw)]),
+      )
+    : (config.params ?? {})
+  const options = config.validateOptions
+    ? Object.fromEntries(
+        Object.entries(config.optionConfig!).map(([key, settings]) => {
+          for (const field of Object.keys(settings)) {
+            if (field !== 'type' && field !== 'short' && field !== 'description' && field !== 'negate') throw new ValidationError(`unknown optionConfig setting: ${field}`)
+          }
+          // oxlint-disable-next-line typescript/no-unnecessary-condition -- JavaScript callers can supply an unsupported option type.
+          if (settings.type !== undefined && settings.type !== 'value' && settings.type !== 'flag')
+            throw new ValidationError(`invalid option type: ${key}`)
+          if (settings.negate !== undefined && settings.type !== 'flag')
+            throw new ValidationError(`negate requires a flag: ${key}`)
+          const descriptor = option(raw, settings)
+          return [
+            key,
+            settings.type === 'flag'
+              ? { ...descriptor, kind: 'flag' as const, negate: settings.negate ?? true }
+              : descriptor,
+          ]
+        }),
+      )
+    : (config.options ?? {})
   const args = config.args ?? []
   validateDefinition(path, params, options, args)
-  return { path, params, options, args, sections: config.sections ?? [], description: config.description ?? '', run: config.run }
+  return {
+    path,
+    params,
+    options,
+    args,
+    sections: config.sections ?? [],
+    description: config.description ?? '',
+    run: config.run,
+    validateParams: config.validateParams,
+    validateOptions: config.validateOptions,
+  }
 }
 
-type Field<Name extends string, A extends Arguments> = {} extends Input<A> ? { [K in Name]?: Input<A> } : { [K in Name]: Input<A> }
-export type CommandInput<C extends AnyDefinition> = Field<'params', C['params']> & Field<'options', C['options']> & Field<'args', ArgumentMap<C['args']>>
-export type CommandResult<C extends AnyDefinition> = C['run'] extends (...args: any[]) => infer R ? Awaited<R> : never
-export type CommandHandlerInput<C extends AnyDefinition> = C['run'] extends (input: infer I) => any ? I : never
+type Field<Name extends string, A extends Arguments> =
+  {} extends Input<A> ? { [K in Name]?: Input<A> } : { [K in Name]: Input<A> }
+type SchemaField<Name extends string, S, A extends Arguments> = S extends ObjectSchema
+  ? {} extends SchemaInput<S>
+    ? { [K in Name]?: SchemaInput<S> }
+    : { [K in Name]: SchemaInput<S> }
+  : Field<Name, A>
+export type CommandInput<C extends AnyDefinition> = SchemaField<
+  'params',
+  C['validateParams'],
+  C['params']
+> &
+  SchemaField<'options', C['validateOptions'], C['options']> &
+  Field<'args', ArgumentMap<C['args']>>
+export type CommandResult<C extends AnyDefinition> = C['run'] extends (...args: any[]) => infer R
+  ? Awaited<R>
+  : never
+export type CommandHandlerInput<C extends AnyDefinition> = C['run'] extends (input: infer I) => any
+  ? I
+  : never
 
 export function pathSegments(path: string): string[] {
   if (path === '/') return []
@@ -143,8 +350,16 @@ export function bindCommand<const P extends string, C extends AnyDefinition>(pat
   readonly params: RouteParams<NoInfer<P>> & Record<Exclude<keyof C['params'], ParamNames<NoInfer<P>>>, never>
 }): Omit<C, 'path'> & { readonly path: P } {
   if (command.path !== undefined && path !== command.path) throw new ValidationError(`file path ${path} does not match declared path ${command.path}`)
-  validateDefinition(path, command.params, command.options, command.args)
-  return { ...command, path }
+  const raw = value('text', { parse: text => text, validate: input => input })
+  const params = command.validateParams
+    ? Object.fromEntries(
+        pathSegments(path)
+          .filter(segment => segment.startsWith('$'))
+          .map(segment => [segment.slice(1), positional(raw)]),
+      )
+    : command.params
+  validateDefinition(path, params, command.options, command.args)
+  return { ...command, params, path }
 }
 
 export function defineRegistry<const R extends Record<string, AnyCommand>>(registry: R & { [P in keyof R]: { readonly path: P } }): R {

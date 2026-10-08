@@ -23,6 +23,8 @@
     "oxfmt": "^0.72.0",
     "oxlint": "^1.87.0",
     "oxlint-tsgolint": "^7.0.2003",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "valibot": "^1.5.0",
+    "zod": "^4.6.5"
   }
 }

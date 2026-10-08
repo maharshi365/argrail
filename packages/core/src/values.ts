@@ -24,7 +24,7 @@ export interface StandardSchema<Input = unknown, Output = Input> {
   readonly '~standard': {
     readonly version: 1
     readonly vendor: string
-    readonly types?: { readonly input: Input; readonly output: Output }
+    readonly types?: { readonly input: Input; readonly output: Output } | undefined
     readonly validate: (input: unknown) => SchemaResult<Output> | Promise<SchemaResult<Output>>
   }
 }

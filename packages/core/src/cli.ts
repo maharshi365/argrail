@@ -1,6 +1,6 @@
 import { optionName, pathSegments, type AnyCommand, type Arguments, type Input, type Output, type CommandInput, type CommandResult, type CommandHandlerInput, type Section } from './command.ts'
 import { table, wrap } from './format.ts'
-import { ValidationError } from './values.ts'
+import { ValidationError, schemaValue } from './values.ts'
 import { CLIError, CancelledError, checkSignal, type Failure } from './errors.ts'
 import { createIO, memoryPorts, type IO, type IOPorts } from './io.ts'
 import { createInput } from './input.ts'
@@ -161,7 +161,7 @@ function tokenize(argv: readonly string[], entry: CompiledCommand): Tokens {
   return result
 }
 
-function decodeArguments(definitions: Arguments, supplied: Input<Arguments>, label: string, shell = false): Output<Arguments> {
+function decodeArguments(definitions: Arguments, supplied: Input<Arguments>, label: string, shell = false, schema?: AnyCommand['validateOptions']): Output<Arguments> {
   // oxlint-disable-next-line deslop/no-runtime-typeof, typescript/no-unnecessary-condition -- JavaScript callers can pass non-object argument bags.
   if (typeof supplied !== 'object' || supplied === null || Array.isArray(supplied)) {
     throw new ValidationError(`${label} values must be an object`)
@@ -170,6 +170,7 @@ function decodeArguments(definitions: Arguments, supplied: Input<Arguments>, lab
   for (const key of Object.keys(supplied)) {
     if (!Object.prototype.hasOwnProperty.call(definitions, key)) throw new ValidationError(`unknown ${label}`)
   }
+  if (schema) return schemaValue(`${label} values`, schema).validate(supplied)
   for (const [key, descriptor] of Object.entries(definitions)) {
     const input = Object.prototype.hasOwnProperty.call(supplied, key) ? supplied[key] : undefined
     if (input === undefined) {
@@ -319,8 +320,8 @@ export function createCLI<const R extends Registry>(registry: R & { [P in keyof 
     for (const key of Object.keys(input)) {
       if (key !== 'params' && key !== 'options' && key !== 'args') throw new ValidationError('unknown invocation field')
     }
-    const params = decodeArguments(command.params, Object.prototype.hasOwnProperty.call(input, 'params') && input.params !== undefined ? input.params : {}, 'argument')
-    const options = decodeArguments(command.options, Object.prototype.hasOwnProperty.call(input, 'options') && input.options !== undefined ? input.options : {}, 'option')
+    const params = decodeArguments(command.params, Object.prototype.hasOwnProperty.call(input, 'params') && input.params !== undefined ? input.params : {}, 'argument', false, command.validateParams)
+    const options = decodeArguments(command.options, Object.prototype.hasOwnProperty.call(input, 'options') && input.options !== undefined ? input.options : {}, 'option', false, command.validateOptions)
     const args = decodeArguments(byPath.get(path)!.args, Object.prototype.hasOwnProperty.call(input, 'args') && input.args !== undefined ? input.args : {}, 'argument')
     const ctx = await context(createIO(execution.io ?? memoryPorts()), execution.signal ?? new AbortController().signal)
     const result = await command.run({ params, options, args, ctx })
@@ -405,8 +406,8 @@ export function createCLI<const R extends Registry>(registry: R & { [P in keyof 
       })
       const trailing: Record<string, string | undefined> = {}
       selected.args.forEach((arg, index) => { trailing[arg.name] = candidate.tokens.words[candidate.segments.length + index] })
-      const params = decodeArguments(selected.params, supplied, 'argument', true)
-      const options = decodeArguments(selected.options, candidate.tokens.options, 'option', true)
+      const params = decodeArguments(selected.params, supplied, 'argument', true, selected.validateParams)
+      const options = decodeArguments(selected.options, candidate.tokens.options, 'option', true, selected.validateOptions)
       const args = decodeArguments(candidate.args, trailing, 'argument', true)
       // Keep handler errors separate from input errors, including ValidationError thrown by a handler.
       try {

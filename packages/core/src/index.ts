@@ -1,5 +1,5 @@
 export { createFileCommand, defineCommand, bindCommand, defineRegistry } from './command.ts'
-export type { Command, CommandInput, CommandResult, CommandHandlerInput, ParamNames, Input, Output, Section } from './command.ts'
+export type { Command, CommandInput, CommandResult, CommandHandlerInput, ParamNames, Input, Output, Section, OptionConfig, OptionSettings } from './command.ts'
 export { createCLI } from './cli.ts'
 export type { CLISettings, RunResult, ExecutionOptions, TestOptions } from './cli.ts'
 export { string, integer, choice, value, schemaValue, positional, argument, option, flag, ValidationError } from './values.ts'

@@ -41,36 +41,58 @@ compiled when `createCLI` runs, not rebuilt for every invocation.
 
 ## Schema libraries
 
-`schemaValue` accepts any synchronous Standard Schema v1 validator. Libraries
-such as Zod, Valibot, and ArkType provide this protocol. No schema library is
-required by the framework.
+`validateParams` and `validateOptions` accept whole-object, synchronous Standard
+Schema v1 validators. Zod v4, Valibot, and ArkType support this protocol. No schema
+library is required by the framework.
 
 ```ts
-import { createFileCommand, positional, schemaValue } from '@argrail/core'
+import { createFileCommand } from '@argrail/core'
 import { z } from 'zod'
 
 export const Command = createFileCommand('/users/$id')({
-  params: {
-    id: positional(schemaValue('user ID', z.string().regex(/^\d+$/).transform(Number))),
+  validateParams: z.object({
+    id: z.string().regex(/^\d+$/).transform(Number),
+  }),
+  validateOptions: z.object({
+    limit: z.coerce.number().int().positive().default(10),
+    verbose: z.boolean().default(false),
+  }),
+  optionConfig: {
+    limit: { short: 'l', description: 'Maximum results' },
+    verbose: { type: 'flag', short: 'v', description: 'Show more details' },
   },
-  run: ({ params }) => {
-    // params.id is a number.
-    return { id: params.id }
+  run: ({ params, options }) => {
+    // params.id and options.limit are numbers; options.verbose is a boolean.
+    return { id: params.id, ...options }
   },
 })
 ```
 
-Programmatic invocation and explicit defaults use the **schema input type**.
-Handlers receive its **output type**. Schema transformations run once per value
-during execution; their output is not passed through the input schema again.
+`optionConfig` must cover every schema input key, including optional keys.
+TypeScript rejects missing and unknown keys. Options take text values by default;
+`type: 'flag'` makes an option boolean. Flags support `--no-verbose` unless
+`negate: false` is set. Shell values stay strings, except flags. Schemas own
+conversion, validation, defaults, and required fields.
+
+Standard Schema does not expose field names at runtime. For JavaScript callers,
+`optionConfig` defines accepted option names; schema-key coverage cannot be checked.
+Help displays CLI metadata without executing schemas or inferring schema defaults.
+
+Programmatic invocation uses the **schema input type**. Handlers receive its
+**output type**. Each whole-object schema runs once during execution; its output
+is not validated again. Parameter schema input keys must match the route's `$`
+segments. `defineCommand` also accepts these schemas; `bindCommand` supplies the
+route path.
 
 ```ts
 await cli.invoke('/users/$id', { params: { id: '42' } })
 ```
 
-Options and trailing arguments support the same schemas. To convert shell text
-before validation, pass `{ parse: Number }`, `{ parse: JSON.parse }`, or another
-conversion function to `schemaValue`.
+The descriptor API remains supported. Use `schemaValue(label, schema)` with
+`positional`, `option`, or `argument` for per-value validation, including trailing
+arguments. Its optional `{ parse: Number }` or `{ parse: JSON.parse }` setting
+converts shell text before validation. Do not combine `params` with
+`validateParams`, or `options` with `validateOptions`, in one command.
 
 ### Libraries without Standard Schema
 
