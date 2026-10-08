@@ -1,0 +1,6 @@
+{
+  "name": "@argrail/demo",
+  "private": true,
+  "type": "module",
+  "dependencies": { "@argrail/core": "workspace:*" }
+}

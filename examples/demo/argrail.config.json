@@ -1,0 +1,8 @@
+{
+  "name": "argrail-demo",
+  "version": "0.1.0",
+  "description": "An example CLI built from file-based commands.",
+  "commandsDirectory": "src/commands",
+  "generatedRegistry": "src/commandTree.gen.ts",
+  "outDirectory": "dist"
+}

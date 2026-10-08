@@ -1,0 +1,6 @@
+{
+  "name": "@argrail/tooling",
+  "version": "0.1.0",
+  "type": "module",
+  "bin": { "argrail": "./src/argrail.mjs" }
+}

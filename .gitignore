@@ -1,0 +1,4 @@
+node_modules/
+dist/
+.argrail/
+*.gen.ts

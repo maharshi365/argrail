@@ -1,0 +1,17 @@
+{
+  "name": "argrail",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "workspaces": ["packages/*", "examples/*"],
+  "scripts": {
+    "argrail": "bun packages/tooling/src/argrail.mjs",
+    "test": "bun test",
+    "check": "tsc --noEmit",
+    "generate:demo": "bun packages/tooling/src/argrail.mjs generate --project examples/demo",
+    "check:demo": "bun packages/tooling/src/argrail.mjs check --project examples/demo",
+    "build:demo": "bun packages/tooling/src/argrail.mjs build --project examples/demo",
+    "dev:demo": "bun packages/tooling/src/argrail.mjs dev --project examples/demo"
+  },
+  "devDependencies": { "typescript": "^5.9.3" }
+}

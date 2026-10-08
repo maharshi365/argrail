@@ -1,0 +1,38 @@
+{
+  "lockfileVersion": 2,
+  "configVersion": 1,
+  "workspaces": {
+    "": {
+      "name": "argrail",
+      "devDependencies": {
+        "typescript": "^5.9.3",
+      },
+    },
+    "examples/demo": {
+      "name": "@argrail/demo",
+      "dependencies": {
+        "@argrail/core": "workspace:*",
+      },
+    },
+    "packages/core": {
+      "name": "@argrail/core",
+      "version": "0.1.0",
+    },
+    "packages/tooling": {
+      "name": "@argrail/tooling",
+      "version": "0.1.0",
+      "bin": {
+        "argrail": "./src/argrail.mjs",
+      },
+    },
+  },
+  "packages": {
+    "@argrail/core": ["@argrail/core@workspace:packages/core"],
+
+    "@argrail/demo": ["@argrail/demo@workspace:examples/demo"],
+
+    "@argrail/tooling": ["@argrail/tooling@workspace:packages/tooling"],
+
+    "typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
+  }
+}
