@@ -12,6 +12,7 @@ type ExecutablePaths<R extends Registry> = { [P in keyof R]: R[P]['run'] extends
 type Services<C extends AnyCommand> = CommandHandlerInput<C> extends { ctx: CommandContext<infer S> } ? S : unknown
 type Intersect<U> = (U extends unknown ? (value: U) => void : never) extends (value: infer I) => void ? I : never
 type RequiredServices<R extends Registry> = Intersect<{ [P in keyof R]: Services<R[P]> }[keyof R]>
+type IsUnion<T, Whole = T> = T extends Whole ? [Whole] extends [T] ? false : true : never
 
 export interface CLISettings {
   name: string
@@ -46,14 +47,90 @@ interface Tokens {
   help: boolean
 }
 
-function tokenize(argv: readonly string[], command: AnyCommand): Tokens {
-  const result: Tokens = { words: [], options: {}, errors: [], help: false }
-  const aliases = new Map<string, { key: string; negated: boolean }>()
-  for (const [key, descriptor] of Object.entries(command.options as Arguments)) {
-    aliases.set(`--${optionName(key)}`, { key, negated: false })
-    if (descriptor.short) aliases.set(`-${descriptor.short}`, { key, negated: false })
-    if (descriptor.kind === 'flag' && descriptor.negate) aliases.set(`--no-${optionName(key)}`, { key, negated: true })
+interface CompiledCommand {
+  command: AnyCommand
+  segments: string[]
+  aliases: Map<string, { key: string; negated: boolean; takesValue: boolean }>
+  arities: Map<string, boolean>
+  args: Arguments
+}
+
+interface OptionScope {
+  children: Map<string, OptionScope>
+  dynamic: OptionScope | undefined
+  own: Map<string, boolean>
+  all: Map<string, boolean | null>
+}
+
+function optionScope(): OptionScope {
+  return { children: new Map(), dynamic: undefined, own: new Map(), all: new Map() }
+}
+
+function compileCommands(registry: Registry): CompiledCommand[] {
+  const entries = Object.values(registry).map(command => {
+    const aliases: CompiledCommand['aliases'] = new Map()
+    for (const [key, descriptor] of Object.entries(command.options as Arguments)) {
+      const alias = { key, negated: false, takesValue: descriptor.kind !== 'flag' }
+      aliases.set(`--${optionName(key)}`, alias)
+      if (descriptor.short) aliases.set(`-${descriptor.short}`, alias)
+      if (descriptor.kind === 'flag' && descriptor.negate) aliases.set(`--no-${optionName(key)}`, { ...alias, negated: true })
+    }
+    return { command, segments: pathSegments(command.path), aliases, arities: new Map<string, boolean>(), args: Object.fromEntries(command.args.map(arg => [arg.name, arg])) }
+  }).sort(routePriority)
+  const root = optionScope()
+  for (const entry of entries) {
+    let node = root
+    for (const segment of entry.segments) {
+      if (segment.startsWith('$')) node = node.dynamic ??= optionScope()
+      else {
+        let child = node.children.get(segment)
+        if (!child) { child = optionScope(); node.children.set(segment, child) }
+        node = child
+      }
+    }
+    for (const [name, alias] of entry.aliases) node.own.set(name, alias.takesValue)
   }
+  function collect(node: OptionScope): Map<string, boolean | null> {
+    for (const [name, arity] of node.own) node.all.set(name, arity)
+    const children = [...node.children.values(), ...(node.dynamic ? [node.dynamic] : [])]
+    for (const child of children) {
+      for (const [name, arity] of collect(child)) {
+        node.all.set(name, node.all.has(name) && node.all.get(name) !== arity ? null : arity)
+      }
+    }
+    return node.all
+  }
+  collect(root)
+  for (const entry of entries) {
+    function merge(arities: Map<string, boolean | null>, allowUnknownConflict = false) {
+      for (const [name, arity] of arities) {
+        // An ancestor with no such option cannot outrank its matching descendants.
+        if (arity === null && allowUnknownConflict && !entry.aliases.has(name)) continue
+        if (arity === null || (entry.arities.has(name) && entry.arities.get(name) !== arity)) {
+          throw new ValidationError(`conflicting option arity for ${name} around ${entry.command.path}`)
+        }
+        entry.arities.set(name, arity)
+      }
+    }
+    let nodes = [root]
+    merge(root.own)
+    for (const segment of entry.segments) {
+      nodes = nodes.flatMap(node => {
+        const children = segment.startsWith('$') ? [...node.children.values()] : [node.children.get(segment)].filter((child): child is OptionScope => child !== undefined)
+        if (node.dynamic) children.push(node.dynamic)
+        return children
+      })
+      for (const node of nodes) merge(node.own)
+    }
+    if (entry.command.run) {
+      for (const node of nodes) merge(node.all, nodes.length === 1)
+    }
+  }
+  return entries
+}
+
+function tokenize(argv: readonly string[], entry: CompiledCommand): Tokens {
+  const result: Tokens = { words: [], options: {}, errors: [], help: false }
   let positionalOnly = false
   for (let index = 0; index < argv.length; index++) {
     const token = argv[index]!
@@ -62,21 +139,21 @@ function tokenize(argv: readonly string[], command: AnyCommand): Tokens {
     if (positionalOnly || token === '-' || !token.startsWith('-') || /^-\d/.test(token)) { result.words.push(token); continue }
     const equals = token.indexOf('=')
     const name = equals < 0 ? token : token.slice(0, equals)
-    const alias = aliases.get(name)
-    if (!alias) { result.errors.push('Unknown option. Run --help to see supported options.'); continue }
-    const descriptor = command.options[alias.key] as Arguments[string]
-    if (Object.prototype.hasOwnProperty.call(result.options, alias.key)) result.errors.push(`option ${name} was supplied more than once`)
-    if (descriptor!.kind === 'flag') {
-      if (equals >= 0) result.errors.push(`flag ${name} does not accept a value`)
-      result.options[alias.key] = !alias.negated
+    const alias = entry.aliases.get(name)
+    if (!alias) result.errors.push('Unknown option. Run --help to see supported options.')
+    if (!entry.arities.has(name)) continue
+    if (alias && Object.prototype.hasOwnProperty.call(result.options, alias.key)) result.errors.push(`option ${name} was supplied more than once`)
+    if (!entry.arities.get(name)) {
+      if (alias && equals >= 0) result.errors.push(`flag ${name} does not accept a value`)
+      if (alias) result.options[alias.key] = !alias.negated
     } else if (equals >= 0) {
-      result.options[alias.key] = token.slice(equals + 1)
+      if (alias) result.options[alias.key] = token.slice(equals + 1)
     } else {
       const next = argv[index + 1]
       if (next === undefined || (next !== '-' && next.startsWith('-') && !/^-\d/.test(next))) {
-        result.errors.push(`missing value for ${name}`)
+        if (alias) result.errors.push(`missing value for ${name}`)
       } else {
-        result.options[alias.key] = next
+        if (alias) result.options[alias.key] = next
         index++
       }
     }
@@ -93,7 +170,7 @@ function decodeArguments(definitions: Arguments, supplied: Record<string, unknow
     if (!Object.prototype.hasOwnProperty.call(definitions, key)) throw new ValidationError(`unknown ${label}`)
   }
   for (const [key, descriptor] of Object.entries(definitions)) {
-    const input = supplied[key]
+    const input = Object.prototype.hasOwnProperty.call(supplied, key) ? supplied[key] : undefined
     if (input === undefined) {
       if (descriptor.hasDefault) result[key] = descriptor.value.validate(descriptor.defaultValue)
       else if (descriptor.required) throw new ValidationError(`missing ${label}: ${key}`)
@@ -101,8 +178,11 @@ function decodeArguments(definitions: Arguments, supplied: Record<string, unknow
       continue
     }
     try {
-      const decoded = shell && descriptor.kind !== 'flag' ? descriptor.value.parse(input as string) : input
-      result[key] = descriptor.value.validate(decoded)
+      if (shell && descriptor.kind !== 'flag' && descriptor.value.decode) result[key] = descriptor.value.decode(input as string)
+      else {
+        const decoded = shell && descriptor.kind !== 'flag' ? descriptor.value.parse(input as string) : input
+        result[key] = descriptor.value.validate(decoded)
+      }
     }
     catch (error) {
       if (!(error instanceof ValidationError)) throw error
@@ -148,13 +228,38 @@ export function createCLI<const R extends Registry>(registry: R & { [P in keyof 
   assertRoutes(registry)
   if (!/^[a-zA-Z][a-zA-Z0-9-]*$/.test(settings.name)) throw new ValidationError('invalid CLI name')
   const width = Math.max(40, settings.width ?? 80)
-  const entries = Object.values(registry)
+  const entries = compileCommands(registry)
+  const byPath = new Map(entries.map(entry => [entry.command.path, entry]))
+  const groups = entries.filter(entry => !entry.command.run)
+
+  function resolve(argv: readonly string[]) {
+    for (const entry of groups) {
+      const tokens = tokenize(argv, entry)
+      if (matches(entry.segments, tokens.words)) return { ...entry, tokens }
+    }
+    for (const entry of entries) {
+      const tokens = tokenize(argv, entry)
+      const { words } = tokens
+      const { segments, command } = entry
+      const matched = words.length < segments.length
+        ? tokens.help && matches(segments, words, true) && segments.slice(words.length).every(segment => segment.startsWith('$'))
+        : matches(segments, words.slice(0, segments.length)) && words.length <= segments.length + command.args.length
+      if (!matched) continue
+      return { ...entry, tokens }
+    }
+    return undefined
+  }
+
+  function groupPath(words: string[]): string | undefined {
+    const group = entries.find(entry => matches(entry.segments, words, true))
+    return group ? `/${group.segments.slice(0, words.length).join('/')}` : undefined
+  }
 
   function help(path = '/'): string {
     const segments = pathSegments(path)
-    const command = registry[path]
+    const command = byPath.get(path)?.command
     const children = entries.filter(entry => {
-      const candidate = pathSegments(entry.path)
+      const candidate = entry.segments
       return candidate.length > segments.length && segments.every((segment, index) => candidate[index] === segment)
     })
     if (!command && children.length === 0 && path !== '/') throw new ValidationError('Unknown command. Run --help to see supported commands.')
@@ -167,9 +272,9 @@ export function createCLI<const R extends Registry>(registry: R & { [P in keyof 
     if (children.length) {
       const groups = new Map<string, string>()
       for (const child of children) {
-        const name = pathSegments(child.path)[segments.length]!
-        const direct = child.path === `${path === '/' ? '' : path}/${name}`
-        if (!groups.has(name) || direct) groups.set(name, direct ? child.description : 'Command group')
+        const name = child.segments[segments.length]!
+        const direct = child.command.path === `${path === '/' ? '' : path}/${name}`
+        if (!groups.has(name) || direct) groups.set(name, direct ? child.command.description : 'Command group')
       }
       sections.push(`Commands:\n${table([...groups].sort(([a], [b]) => a.localeCompare(b)), width)}`)
     }
@@ -204,16 +309,16 @@ export function createCLI<const R extends Registry>(registry: R & { [P in keyof 
     return { io, signal, input: createInput(io, signal, answers), services, exitCode: 0 }
   }
 
-  async function invoke<const P extends ExecutablePaths<R>>(path: P, input: CommandInput<NoInfer<R[P]>>, execution: ExecutionOptions = {}): Promise<CommandResult<R[P]>> {
+  async function invoke<const P extends ExecutablePaths<R>>(path: P & (IsUnion<P> extends true ? never : unknown), input: CommandInput<NoInfer<R[P]>>, execution: ExecutionOptions = {}): Promise<CommandResult<R[P]>> {
     const command = registry[path]
     if (!command?.run) throw new ValidationError('unknown command or command is not executable')
     if (!input || typeof input !== 'object' || Array.isArray(input)) throw new ValidationError('invocation must be an object')
     for (const key of Object.keys(input)) {
       if (key !== 'params' && key !== 'options' && key !== 'args') throw new ValidationError('unknown invocation field')
     }
-    const params = decodeArguments(command.params, input.params === undefined ? {} : input.params, 'argument')
-    const options = decodeArguments(command.options, input.options === undefined ? {} : input.options, 'option')
-    const args = decodeArguments(Object.fromEntries(command.args.map(arg => [arg.name, arg])), input.args === undefined ? {} : input.args, 'argument')
+    const params = decodeArguments(command.params, Object.prototype.hasOwnProperty.call(input, 'params') && input.params !== undefined ? input.params : {}, 'argument')
+    const options = decodeArguments(command.options, Object.prototype.hasOwnProperty.call(input, 'options') && input.options !== undefined ? input.options : {}, 'option')
+    const args = decodeArguments(byPath.get(path)!.args, Object.prototype.hasOwnProperty.call(input, 'args') && input.args !== undefined ? input.args : {}, 'argument')
     const ctx = await context(createIO(execution.io ?? memoryPorts()), execution.signal ?? new AbortController().signal)
     const result = await command.run({ params, options, args, ctx })
     checkSignal(ctx.signal)
@@ -266,35 +371,20 @@ export function createCLI<const R extends Registry>(registry: R & { [P in keyof 
         return result(0)
       }
       if (argv[0] === 'help') {
-        const target = argv.slice(1).join('/')
-        return showHelp(target ? `/${target}` : '/')
+        const words = argv.slice(1)
+        if (!words.length) return showHelp()
+        const target = resolve(['--help', '--', ...words])
+        const path = target?.command.path ?? groupPath(words)
+        if (path) return showHelp(path)
+        throw new CLIError('COMMAND_NOT_FOUND', 'Unknown command. Run --help to see supported commands.')
       }
-      const candidates = entries.map(command => {
-        const tokens = tokenize(argv, command)
-        const segments = pathSegments(command.path)
-        return { command, tokens, segments }
-      }).filter(candidate => {
-        const words = candidate.tokens.words
-        if (words.length < candidate.segments.length) {
-          return candidate.tokens.help && matches(candidate.segments, words, true) && candidate.segments.slice(words.length).every(segment => segment.startsWith('$'))
-        }
-        if (!matches(candidate.segments, words.slice(0, candidate.segments.length))) return false
-        return words.length <= candidate.segments.length + candidate.command.args.length
-      }).sort((a, b) => {
-        const aGroup = !a.command.run && a.tokens.words.length === a.segments.length
-        const bGroup = !b.command.run && b.tokens.words.length === b.segments.length
-        return aGroup !== bGroup ? (aGroup ? -1 : 1) : routePriority(a, b)
-      })
-      const candidate = candidates[0]
+      const candidate = resolve(argv)
       if (!candidate) {
         // A command group has help even without an index handler.
         const words = argv.filter(token => token !== '--help' && token !== '-h')
-        const groups = words.some(word => word.startsWith('-')) ? [] : entries.map(command => ({ segments: pathSegments(command.path) }))
-          .filter(candidate => matches(candidate.segments, words, true)).sort(routePriority)
-        const group = groups[0]
-        const groupPath = words.length && group ? `/${group.segments.slice(0, words.length).join('/')}` : '/'
-        if (!argv.length || group) {
-          return showHelp(groupPath)
+        const path = words.some(word => word.startsWith('-')) ? undefined : groupPath(words)
+        if (!argv.length || path) {
+          return showHelp(path ?? '/')
         }
         throw new CLIError('COMMAND_NOT_FOUND', 'Unknown command or unexpected arguments. Run --help to see supported commands.')
       }
@@ -309,7 +399,7 @@ export function createCLI<const R extends Registry>(registry: R & { [P in keyof 
       selected.args.forEach((arg, index) => { trailing[arg.name] = candidate.tokens.words[candidate.segments.length + index] })
       const params = decodeArguments(selected.params, supplied, 'argument', true)
       const options = decodeArguments(selected.options, candidate.tokens.options, 'option', true)
-      const args = decodeArguments(Object.fromEntries(selected.args.map(arg => [arg.name, arg])), trailing, 'argument', true)
+      const args = decodeArguments(candidate.args, trailing, 'argument', true)
       // Keep handler errors separate from input errors, including ValidationError thrown by a handler.
       try {
         const ctx = await context(io, signal, answers)

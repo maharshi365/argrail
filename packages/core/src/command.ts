@@ -7,12 +7,13 @@ export type ParamNames<Path extends string> =
   Path extends `${string}/$${infer Name}` ? Name : never
 
 export type Arguments = Record<string, Argument<unknown>>
-export type Output<A extends Arguments> = { [K in keyof A]: A[K] extends Argument<infer T> ? T : never }
+export type Output<A extends Arguments> = { [K in keyof A]: A[K] extends Argument<infer T, boolean, 'positional' | 'option' | 'flag', unknown> ? T : never }
+type Supplied<A extends Arguments> = { [K in keyof A]: A[K] extends Argument<unknown, boolean, 'positional' | 'option' | 'flag', infer I> ? I : never }
 type RequiredKeys<A extends Arguments> = { [K in keyof A]: A[K]['required'] extends true ? K : never }[keyof A]
 export type Input<A extends Arguments> =
   keyof A extends never ? Record<string, never> :
-  { [K in RequiredKeys<A>]: Output<A>[K] } &
-  { [K in Exclude<keyof A, RequiredKeys<A>>]?: Exclude<Output<A>[K], undefined> }
+  { [K in RequiredKeys<A>]: Supplied<A>[K] } &
+  { [K in Exclude<keyof A, RequiredKeys<A>>]?: Exclude<Supplied<A>[K], undefined> }
 
 export type ArgumentMap<A extends readonly NamedArgument[]> = { [D in A[number] as D['name']]: D }
 export interface Section { readonly title: string; readonly body: string }
@@ -104,7 +105,7 @@ export function optionName(key: string): string {
 function validateDefinition(path: string | undefined, params: Arguments, options: Arguments, args: readonly NamedArgument[]): void {
   const names = path === undefined ? Object.keys(params) : pathSegments(path).filter(segment => segment.startsWith('$')).map(segment => segment.slice(1))
   if (new Set(names).size !== names.length) throw new ValidationError(`duplicate positional name in ${path}`)
-  if (names.length !== Object.keys(params).length || names.some(name => !params[name])) {
+  if (names.length !== Object.keys(params).length || names.some(name => !Object.prototype.hasOwnProperty.call(params, name))) {
     throw new ValidationError(`positional definitions must match ${path}`)
   }
   for (const descriptor of Object.values(params)) {

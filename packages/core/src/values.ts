@@ -5,14 +5,60 @@ export class ValidationError extends Error {
   }
 }
 
-export interface Value<T> {
+export interface Value<T, Input = T> {
   readonly label: string
   readonly parse: (text: string) => T
   readonly validate: (input: unknown) => T
+  readonly decode?: (text: string) => T
+  readonly '~input'?: Input
 }
 
 export function value<T>(label: string, decoder: { parse: (text: string) => T; validate: (input: unknown) => T }): Value<T> {
   return { label, ...decoder }
+}
+
+type SchemaResult<T> = { readonly value: T; readonly issues?: undefined } | { readonly issues: readonly { readonly message: string }[] }
+export interface StandardSchema<Input = unknown, Output = Input> {
+  readonly '~standard': {
+    readonly version: 1
+    readonly vendor: string
+    readonly types?: { readonly input: Input; readonly output: Output }
+    readonly validate: (input: unknown) => SchemaResult<Output> | Promise<SchemaResult<Output>>
+  }
+}
+
+export function schemaValue<Input, Output>(label: string, schema: StandardSchema<Input, Output> | ((input: Input) => Output), settings: { parse?: (text: string) => NoInfer<Input> } = {}): Value<Output, Input> {
+  function validate(input: unknown): Output {
+    try {
+      if (typeof schema === 'function') {
+        const output = schema(input as Input)
+        if (output !== null && (typeof output === 'object' || typeof output === 'function') && 'then' in output && typeof output.then === 'function') {
+          void Promise.resolve(output).catch(() => {})
+          throw new ValidationError('Async schema validation is not supported')
+        }
+        return output
+      }
+      const result = schema['~standard'].validate(input)
+      if ('then' in result) {
+        // Consume a possible rejection even though synchronous validation rejects this schema.
+        void Promise.resolve(result).catch(() => {})
+        throw new ValidationError('Async schema validation is not supported')
+      }
+      if (result.issues) throw new ValidationError(result.issues.map(issue => issue.message).join('; '))
+      return result.value
+    } catch (error) {
+      if (error instanceof ValidationError) throw error
+      throw new ValidationError(`Invalid ${label}`)
+    }
+  }
+  const parse = (text: string) => {
+    try { return validate(settings.parse ? settings.parse(text) : text) }
+    catch (error) {
+      if (error instanceof ValidationError) throw error
+      throw new ValidationError(`Invalid ${label}`)
+    }
+  }
+  return { label, parse, validate, decode: parse }
 }
 
 export function string(): Value<string> {
@@ -55,20 +101,20 @@ export function choice<const T extends readonly [string, ...string[]]>(choices: 
   return value(choices.join('|'), { parse: validate, validate })
 }
 
-export interface Argument<T, Required extends boolean = boolean, Kind extends 'positional' | 'option' | 'flag' = 'positional' | 'option' | 'flag'> {
+export interface Argument<T, Required extends boolean = boolean, Kind extends 'positional' | 'option' | 'flag' = 'positional' | 'option' | 'flag', Input = T> {
   readonly kind: Kind
-  readonly value: Value<T>
+  readonly value: Value<T, Input>
   readonly required: Required
   readonly description: string
   readonly short: string | undefined
   readonly hasDefault: boolean
-  readonly defaultValue: T | undefined
+  readonly defaultValue: Input | undefined
   readonly negate: boolean
 }
 
 type Settings = { description?: string; short?: string }
 
-export function positional<T>(parser: Value<T>, settings: { description?: string } = {}): Argument<T, true, 'positional'> {
+export function positional<T, Input = T>(parser: Value<T, Input>, settings: { description?: string } = {}): Argument<T, true, 'positional', Input> {
   return {
     kind: 'positional', value: parser, required: true,
     description: settings.description ?? '', short: undefined,
@@ -76,16 +122,17 @@ export function positional<T>(parser: Value<T>, settings: { description?: string
   }
 }
 
-export function option<T>(parser: Value<T>, settings: Settings & { default: NoInfer<T> }): Argument<T, false, 'option'>
-export function option<T>(parser: Value<T>, settings: Settings & { required: true }): Argument<T, true, 'option'>
-export function option<T>(parser: Value<T>, settings?: Settings & { required?: false }): Argument<T | undefined, false, 'option'>
-export function option<T>(parser: Value<T>, settings: Settings & { default?: T; required?: boolean } = {}): Argument<T | undefined, boolean, 'option'> {
+export function option<T, Input = T>(parser: Value<T, Input>, settings: Settings & { default: NoInfer<Input> }): Argument<T, false, 'option', Input>
+export function option<T, Input = T>(parser: Value<T, Input>, settings: Settings & { required: true }): Argument<T, true, 'option', Input>
+export function option<T, Input = T>(parser: Value<T, Input>, settings?: Settings & { required?: false }): Argument<T | undefined, false, 'option', Input | undefined>
+export function option<T, Input = T>(parser: Value<T, Input>, settings: Settings & { default?: Input; required?: boolean } = {}): Argument<T | undefined, boolean, 'option', Input | undefined> {
   const hasDefault = Object.prototype.hasOwnProperty.call(settings, 'default')
   if (hasDefault && settings.required) throw new ValidationError('an option cannot be required and defaulted')
+  if (hasDefault) parser.validate(settings.default)
   return {
     kind: 'option', value: parser, required: settings.required ?? false,
     description: settings.description ?? '', short: settings.short,
-    hasDefault, defaultValue: hasDefault ? parser.validate(settings.default) : undefined, negate: false,
+    hasDefault, defaultValue: hasDefault ? settings.default : undefined, negate: false,
   }
 }
 
@@ -107,18 +154,19 @@ export function flag(settings: Settings & { default?: boolean; negate?: boolean 
   }
 }
 
-export type NamedArgument<Name extends string = string, T = unknown, Required extends boolean = boolean> = Argument<T, Required, 'positional'> & { readonly name: Name }
+export type NamedArgument<Name extends string = string, T = unknown, Required extends boolean = boolean, Input = T> = Argument<T, Required, 'positional', Input> & { readonly name: Name }
 
-export function argument<const N extends string, T>(name: N, parser: Value<T>, settings: { default: NoInfer<T>; description?: string }): NamedArgument<N, T, false>
-export function argument<const N extends string, T>(name: N, parser: Value<T>, settings: { required: false; description?: string }): NamedArgument<N, T | undefined, false>
-export function argument<const N extends string, T>(name: N, parser: Value<T>, settings?: { required?: true; description?: string }): NamedArgument<N, T, true>
+export function argument<const N extends string, T, Input = T>(name: N, parser: Value<T, Input>, settings: { default: NoInfer<Input>; description?: string }): NamedArgument<N, T, false, Input>
+export function argument<const N extends string, T, Input = T>(name: N, parser: Value<T, Input>, settings: { required: false; description?: string }): NamedArgument<N, T | undefined, false, Input | undefined>
+export function argument<const N extends string, T, Input = T>(name: N, parser: Value<T, Input>, settings?: { required?: true; description?: string }): NamedArgument<N, T, true, Input>
 export function argument(name: string, parser: Value<unknown>, settings: { default?: unknown; required?: boolean; description?: string } = {}): NamedArgument {
   if (!/^[a-zA-Z][a-zA-Z0-9]*$/.test(name)) throw new ValidationError('invalid argument name')
   const hasDefault = Object.prototype.hasOwnProperty.call(settings, 'default')
   if (hasDefault && settings.required) throw new ValidationError('an argument cannot be required and defaulted')
+  if (hasDefault) parser.validate(settings.default)
   return {
     ...positional(parser, settings), name,
     required: hasDefault ? false : settings.required ?? true,
-    hasDefault, defaultValue: hasDefault ? parser.validate(settings.default) : undefined,
+    hasDefault, defaultValue: hasDefault ? settings.default : undefined,
   }
 }

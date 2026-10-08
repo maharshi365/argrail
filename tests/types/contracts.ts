@@ -77,3 +77,13 @@ createFileCommand('/$id')({
 })
 // @ts-expect-error defaults cannot widen the decoder's choice type
 option(choice(['soft', 'hard']), { default: 'other' })
+
+const user = createFileCommand('/users/$userId')({ params: { userId: positional(string()) }, run: ({ params }) => params.userId })
+const team = createFileCommand('/teams/$teamId')({ params: { teamId: positional(string()) }, run: ({ params }) => params.teamId })
+const unionCLI = createCLI({ [user.path]: user, [team.path]: team }, { name: 'app' })
+const unionPath = Math.random() > 0.5 ? user.path : team.path
+// @ts-expect-error callers must narrow union paths before supplying route-specific input
+unionCLI.invoke(unionPath, {})
+// @ts-expect-error a union path cannot accept only one possible command's input
+unionCLI.invoke(unionPath, { params: { userId: 'u_1' } })
+if (unionPath === user.path) unionCLI.invoke(unionPath, { params: { userId: 'u_1' } })
