@@ -1,4 +1,4 @@
-import { optionName, pathSegments, type AnyCommand, type Arguments, type CommandInput, type CommandResult, type CommandHandlerInput, type Section } from './command.ts'
+import { optionName, pathSegments, type AnyCommand, type Arguments, type Input, type Output, type CommandInput, type CommandResult, type CommandHandlerInput, type Section } from './command.ts'
 import { table, wrap } from './format.ts'
 import { ValidationError } from './values.ts'
 import { CLIError, CancelledError, checkSignal, type Failure } from './errors.ts'
@@ -42,7 +42,7 @@ export interface RunResult {
 
 interface Tokens {
   words: string[]
-  options: Record<string, unknown>
+  options: Record<string, string | boolean | undefined>
   errors: string[]
   help: boolean
 }
@@ -69,7 +69,7 @@ function optionScope(): OptionScope {
 function compileCommands(registry: Registry): CompiledCommand[] {
   const entries = Object.values(registry).map(command => {
     const aliases: CompiledCommand['aliases'] = new Map()
-    for (const [key, descriptor] of Object.entries(command.options as Arguments)) {
+    for (const [key, descriptor] of Object.entries<Arguments[string]>(command.options)) {
       const alias = { key, negated: false, takesValue: descriptor.kind !== 'flag' }
       aliases.set(`--${optionName(key)}`, alias)
       if (descriptor.short) aliases.set(`-${descriptor.short}`, alias)
@@ -161,11 +161,12 @@ function tokenize(argv: readonly string[], entry: CompiledCommand): Tokens {
   return result
 }
 
-function decodeArguments(definitions: Arguments, supplied: Record<string, unknown>, label: string, shell = false): Record<string, unknown> {
+function decodeArguments(definitions: Arguments, supplied: Input<Arguments>, label: string, shell = false): Output<Arguments> {
+  // oxlint-disable-next-line deslop/no-runtime-typeof, typescript/no-unnecessary-condition -- JavaScript callers can pass non-object argument bags.
   if (typeof supplied !== 'object' || supplied === null || Array.isArray(supplied)) {
     throw new ValidationError(`${label} values must be an object`)
   }
-  const result: Record<string, unknown> = {}
+  const result: Output<Arguments> = {}
   for (const key of Object.keys(supplied)) {
     if (!Object.prototype.hasOwnProperty.call(definitions, key)) throw new ValidationError(`unknown ${label}`)
   }
@@ -279,15 +280,15 @@ export function createCLI<const R extends Registry>(registry: R & { [P in keyof 
       sections.push(`Commands:\n${table([...groups].sort(([a], [b]) => a.localeCompare(b)), width)}`)
     }
     const argumentRows: [string, string][] = command ? [
-      ...Object.entries(command.params as Arguments).map(([key, arg]): [string, string] => [
+      ...Object.entries<Arguments[string]>(command.params).map(([key, arg]): [string, string] => [
         `<${key}>`, [arg.description, `Type: ${arg.value.label}. Required.`].filter(Boolean).join(' '),
       ]),
-      ...command.args.map(arg => [arg.required ? `<${arg.name}>` : `[${arg.name}]`, [arg.description, `Type: ${arg.value.label}.`, arg.required ? 'Required.' : '', arg.hasDefault ? `Default: ${JSON.stringify(arg.defaultValue)}.` : ''].filter(Boolean).join(' ')] as [string, string]),
+      ...command.args.map((arg): [string, string] => [arg.required ? `<${arg.name}>` : `[${arg.name}]`, [arg.description, `Type: ${arg.value.label}.`, arg.required ? 'Required.' : '', arg.hasDefault ? `Default: ${JSON.stringify(arg.defaultValue)}.` : ''].filter(Boolean).join(' ')]),
     ] : []
     if (argumentRows.length) {
       sections.push(`Arguments:\n${table(argumentRows, width)}`)
     }
-    const rows: [string, string][] = command ? Object.entries(command.options as Arguments).map(([key, arg]) => [
+    const rows: [string, string][] = command ? Object.entries<Arguments[string]>(command.options).map(([key, arg]) => [
       `${arg.short ? `-${arg.short}, ` : ''}--${optionName(key)}${arg.kind === 'flag' ? '' : ` <${arg.value.label}>`}`,
       [arg.description, arg.required ? 'Required.' : '', arg.hasDefault ? `Default: ${JSON.stringify(arg.defaultValue)}.` : '',
         arg.kind === 'flag' && arg.negate ? `Negate with --no-${optionName(key)}.` : ''].filter(Boolean).join(' '),
@@ -311,7 +312,9 @@ export function createCLI<const R extends Registry>(registry: R & { [P in keyof 
 
   async function invoke<const P extends ExecutablePaths<R>>(path: P & (IsUnion<P> extends true ? never : unknown), input: CommandInput<NoInfer<R[P]>>, execution: ExecutionOptions = {}): Promise<CommandResult<R[P]>> {
     const command = registry[path]
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- Untyped callers can supply a path absent from the registry.
     if (!command?.run) throw new ValidationError('unknown command or command is not executable')
+    // oxlint-disable-next-line deslop/no-runtime-typeof -- Validate the public invocation boundary for JavaScript callers.
     if (!input || typeof input !== 'object' || Array.isArray(input)) throw new ValidationError('invocation must be an object')
     for (const key of Object.keys(input)) {
       if (key !== 'params' && key !== 'options' && key !== 'args') throw new ValidationError('unknown invocation field')
@@ -335,13 +338,18 @@ export function createCLI<const R extends Registry>(registry: R & { [P in keyof 
       stderr: { write(text) { stderr += text; ports.stderr.write(text) } },
     })
     const signal = execution.signal ?? new AbortController().signal
-    const result = (exitCode: number, value?: unknown): RunResult => ({ exitCode, stdout, stderr, ...(value === undefined ? {} : { value }) })
+    function result<T>(exitCode: number, value?: T): RunResult {
+      const output: RunResult = { exitCode, stdout, stderr }
+      if (value !== undefined) output.value = value
+      return output
+    }
     function showHelp(path = '/') {
       const text = help(path)
       if (settings.presentation?.help) settings.presentation.help(text, io)
       else io.stdout.write(text)
       return result(0)
     }
+    // oxlint-disable-next-line deslop/no-unknown-parameters -- Caught values can be arbitrary; only known errors expose their messages.
     function failure(error: unknown, category: Failure['category']): RunResult {
       const cancelled = error instanceof CancelledError || signal.aborted
       const safe = error instanceof CLIError || error instanceof ValidationError
@@ -391,11 +399,11 @@ export function createCLI<const R extends Registry>(registry: R & { [P in keyof 
       selected = candidate.command
       if (candidate.tokens.errors.length) throw new CLIError('PARSE', candidate.tokens.errors.join('\n'))
       if (candidate.tokens.help || !selected.run) return showHelp(selected.path)
-      const supplied: Record<string, unknown> = {}
+      const supplied: Record<string, string | undefined> = {}
       candidate.segments.forEach((segment, index) => {
         if (segment.startsWith('$')) supplied[segment.slice(1)] = candidate.tokens.words[index]
       })
-      const trailing: Record<string, unknown> = {}
+      const trailing: Record<string, string | undefined> = {}
       selected.args.forEach((arg, index) => { trailing[arg.name] = candidate.tokens.words[candidate.segments.length + index] })
       const params = decodeArguments(selected.params, supplied, 'argument', true)
       const options = decodeArguments(selected.options, candidate.tokens.options, 'option', true)
@@ -416,10 +424,11 @@ export function createCLI<const R extends Registry>(registry: R & { [P in keyof 
   }
 
   async function test(options: TestOptions): Promise<RunResult> {
-    return execute(options.argv, {
+    const execution: ExecutionOptions = {
       io: memoryPorts(options.stdin ?? '', options.answers !== undefined),
-      ...(options.signal ? { signal: options.signal } : {}),
-    }, options.answers)
+    }
+    if (options.signal) execution.signal = options.signal
+    return execute(options.argv, execution, options.answers)
   }
 
   async function run(argv?: readonly string[]): Promise<RunResult> {

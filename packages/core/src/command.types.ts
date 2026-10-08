@@ -24,12 +24,12 @@ bindCommand('/records', lookup)
 bindCommand('/records/$id', defineCommand({ run: () => {} }))
 
 const cli = createCLI({ '/records/$id': command }, { name: 'app' })
-cli.invoke('/records/$id', { params: { id: 1 } })
-cli.invoke('/records/$id', { params: { id: 1 }, args: { format: 'full' } })
+void cli.invoke('/records/$id', { params: { id: 1 } })
+void cli.invoke('/records/$id', { params: { id: 1 }, args: { format: 'full' } })
 // @ts-expect-error defaulted positional values retain the parser's literal union
-cli.invoke('/records/$id', { params: { id: 1 }, args: { format: 'wrong' } })
+void cli.invoke('/records/$id', { params: { id: 1 }, args: { format: 'wrong' } })
 // @ts-expect-error unknown trailing argument keys are rejected
-cli.invoke('/records/$id', { params: { id: 1 }, args: { unknown: true } })
+void cli.invoke('/records/$id', { params: { id: 1 }, args: { unknown: true } })
 const input: CommandInput<typeof command> = { params: { id: 1 } }
 const result: CommandResult<typeof command> = { id: 1, format: 'short', mode: 'one', invalid: 'other' }
 const handler = (input: CommandHandlerInput<typeof command>) => input.params.id
@@ -38,7 +38,7 @@ void [input, result, handler]
 const group = bindCommand('/records', defineCommand({ description: 'Records' }))
 const grouped = createCLI({ '/records': group, '/records/$id': command }, { name: 'app' })
 // @ts-expect-error metadata-only groups are not executable through typed invocation
-grouped.invoke('/records', {})
+void grouped.invoke('/records', {})
 
 const serviceCommand = defineCommand.withContext<{ prefix: string }>()
 const service = bindCommand('/service', serviceCommand({ run: ({ ctx }) => ctx.services.prefix }))
@@ -52,13 +52,15 @@ createCLI({ '/service': service, '/records/$id': command }, { name: 'app' })
 
 const identifier = value('identifier', {
   parse: text => ({ id: text }),
-  validate: (input: unknown): { id: string } => {
+  // oxlint-disable-next-line deslop/no-unknown-parameters -- Exercise a custom validator's untrusted-input contract.
+  validate: (input: unknown) => {
+    // oxlint-disable-next-line deslop/no-runtime-typeof -- Validate the custom decoder's object and property types.
     if (typeof input !== 'object' || !input || !('id' in input) || typeof input.id !== 'string') throw new Error()
     return { id: input.id }
   },
 })
 const transformed = bindCommand('/$id', defineCommand({ params: { id: positional(identifier) }, run: ({ params }) => params.id }))
 const transformedCLI = createCLI({ '/$id': transformed }, { name: 'app' })
-transformedCLI.invoke('/$id', { params: { id: { id: 'a' } } })
+void transformedCLI.invoke('/$id', { params: { id: { id: 'a' } } })
 // @ts-expect-error programmatic calls accept decoded values, not shell text
-transformedCLI.invoke('/$id', { params: { id: 'a' } })
+void transformedCLI.invoke('/$id', { params: { id: 'a' } })

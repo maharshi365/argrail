@@ -129,6 +129,7 @@ describe('definition validation', () => {
     const id = value('ID', {
       parse: input => ({ id: input }),
       validate: input => {
+        // oxlint-disable-next-line deslop/no-runtime-typeof -- Exercise custom decoder validation before accessing string methods.
         if (!input || typeof input.id !== 'string' || !input.id.startsWith('u_')) throw new ValidationError('expected u_ prefix')
         return input
       },

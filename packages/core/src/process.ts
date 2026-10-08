@@ -1,18 +1,18 @@
 import { CLIError, CancelledError, checkSignal } from './errors.ts'
-import type { IOPorts, InputSource, ReadSettings } from './io.ts'
+import type { InputSource, ReadSettings, Writer } from './io.ts'
 
 export interface TerminalStream {
   readonly isTTY?: boolean
   readonly isRaw?: boolean
   readonly readableEnded?: boolean
   setRawMode?(raw: boolean): void
-  on(event: string, listener: (...args: any[]) => void): unknown
-  off(event: string, listener: (...args: any[]) => void): unknown
-  resume(): unknown
-  pause(): unknown
+  on(event: string, listener: (...args: any[]) => void): void
+  off(event: string, listener: (...args: any[]) => void): void
+  resume(): void
+  pause(): void
 }
 
-export function streamInput(stream: TerminalStream, output: { write(text: string): unknown }): InputSource {
+export function streamInput(stream: TerminalStream, output: Writer): InputSource {
   let reading = false
   let ended = false
   return {
@@ -61,6 +61,8 @@ export function streamInput(stream: TerminalStream, output: { write(text: string
               if (new TextEncoder().encode(text).byteLength > maxBytes) { finish(new CLIError('INPUT_LIMIT', 'Input exceeds the byte limit')); return }
             }
           }
+          // Stream events are an I/O boundary; reject values outside the supported chunk types.
+          /* oxlint-disable deslop/no-unknown-parameters, deslop/no-runtime-typeof */
           function onData(chunk: unknown) {
             if (settled) return
             try {
@@ -72,6 +74,7 @@ export function streamInput(stream: TerminalStream, output: { write(text: string
               append(typeof chunk === 'string' ? chunk : decoder.decode(chunk, { stream: true }))
             } catch { finish(new CLIError('INVALID_INPUT', 'Unable to read text input')) }
           }
+          /* oxlint-enable deslop/no-unknown-parameters, deslop/no-runtime-typeof */
           function onEnd() {
             ended = true
             if (settings.terminal) { finish(new CancelledError()); return }
@@ -99,15 +102,15 @@ export function streamInput(stream: TerminalStream, output: { write(text: string
 interface Process {
   argv: string[]
   stdin: TerminalStream
-  stdout: { write(text: string): unknown; isTTY?: boolean }
-  stderr: { write(text: string): unknown; isTTY?: boolean }
+  stdout: Writer & { isTTY?: boolean }
+  stderr: Writer & { isTTY?: boolean }
   exitCode: number
-  on(event: string, listener: () => void): unknown
-  off(event: string, listener: () => void): unknown
+  on(event: string, listener: () => void): void
+  off(event: string, listener: () => void): void
 }
 
-export function processRuntime(): { process: Process; io: IOPorts } {
-  const process = (globalThis as unknown as { process?: Process }).process
+export function processRuntime() {
+  const process = (globalThis as { process?: Process }).process
   if (!process) throw new CLIError('NO_PROCESS', 'A Bun or Node process is required')
   return {
     process,

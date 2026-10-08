@@ -1,3 +1,5 @@
+// This module is the parsing boundary: validators must accept unknown input and check its runtime type.
+/* oxlint-disable deslop/no-unknown-parameters, deslop/no-runtime-typeof */
 export class ValidationError extends Error {
   constructor(message: string) {
     super(message)

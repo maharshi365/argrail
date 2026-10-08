@@ -20,9 +20,9 @@ const command = createFileCommand('/records/$id')({
   },
 })
 const cli = createCLI({ [command.path]: command }, { name: 'app' })
-cli.invoke(command.path, { params: { id: '42' }, options: { count: '3' }, args: { offset: '2' } })
+void cli.invoke(command.path, { params: { id: '42' }, options: { count: '3' }, args: { offset: '2' } })
 // @ts-expect-error programmatic invocation receives schema inputs, not transformed outputs
-cli.invoke(command.path, { params: { id: 42 } })
+void cli.invoke(command.path, { params: { id: 42 } })
 // @ts-expect-error schema defaults use the input type
 option(number, { default: 1 })
 // @ts-expect-error trailing defaults use the input type
@@ -30,6 +30,6 @@ argument('offset', number, { default: 0 })
 const adapted = schemaValue('number', (input: number) => ({ number: input }), { parse: Number })
 const adapterCommand = createFileCommand('/adapted')({ options: { count: option(adapted, { required: true }) }, run: ({ options }) => options.count.number })
 const adapterCLI = createCLI({ [adapterCommand.path]: adapterCommand }, { name: 'app' })
-adapterCLI.invoke(adapterCommand.path, { options: { count: 3 } })
+void adapterCLI.invoke(adapterCommand.path, { options: { count: 3 } })
 // @ts-expect-error callback adapter input is inferred from its validator
-adapterCLI.invoke(adapterCommand.path, { options: { count: '3' } })
+void adapterCLI.invoke(adapterCommand.path, { options: { count: '3' } })

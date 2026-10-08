@@ -13,6 +13,8 @@ export interface Input {
 export function createInput(io: IO, signal: AbortSignal, answers?: readonly unknown[]): Input {
   let answerIndex = 0
   let active = false
+  // Scripted answers are untrusted until read or select validates them.
+  // oxlint-disable-next-line deslop/no-unknown-returns
   function nextAnswer(): unknown {
     if (!answers || answerIndex >= answers.length) throw new CLIError('INPUT_EXHAUSTED', 'No scripted answer is available')
     return answers[answerIndex++]
@@ -32,6 +34,7 @@ export function createInput(io: IO, signal: AbortSignal, answers?: readonly unkn
     if (terminal && settings.prompt) io.stderr.write(terminalText(settings.prompt))
     const input = terminal && answers !== undefined ? nextAnswer() : await io.stdin.read({ ...settings, maxBytes, terminal }, signal)
     checkSignal(signal)
+    // oxlint-disable-next-line deslop/no-runtime-typeof -- Validate the scripted-answer boundary.
     if (typeof input !== 'string') throw new CLIError('INVALID_INPUT', 'Expected a text answer')
     if (new TextEncoder().encode(input).byteLength > maxBytes) throw new CLIError('INPUT_LIMIT', 'Input exceeds the byte limit')
     return settings.stripFinalNewline ? input.replace(/\r?\n$/, '') : input

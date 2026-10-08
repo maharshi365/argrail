@@ -27,7 +27,7 @@ export function createIO(ports: IOPorts): IO {
     ...ports,
     json(value) {
       let text: string | undefined
-      try { text = JSON.stringify(value) }
+      try { text = JSON.stringify(value) as string | undefined }
       catch { throw new CLIError('OUTPUT_ERROR', 'Output is not JSON serializable') }
       if (text === undefined) throw new CLIError('OUTPUT_ERROR', 'Output is not JSON serializable')
       ports.stdout.write(text + '\n')
@@ -52,5 +52,6 @@ export function memoryPorts(stdin = '', interactive = false): IOPorts {
 }
 
 export function terminalText(text: string): string {
+  // oxlint-disable-next-line eslint/no-control-regex -- Strip terminal control characters from untrusted labels.
   return text.replace(/[\u0000-\u001f\u007f-\u009f]/g, '')
 }

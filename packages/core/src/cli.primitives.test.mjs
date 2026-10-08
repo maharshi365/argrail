@@ -60,6 +60,7 @@ test('validates decoded values without parsing them a second time', async () => 
   const identifier = value('identifier', {
     parse: text => ({ id: text }),
     validate: input => {
+      // oxlint-disable-next-line deslop/no-runtime-typeof -- Exercise validation of the custom decoder's output.
       if (!input || typeof input.id !== 'string') throw new CLIError('INVALID_ID', 'Invalid identifier')
       return input
     },
@@ -147,6 +148,28 @@ test('cancellation is distinct and prevents starting a handler', async () => {
 test('rejects invalid trailing argument order and duplicate parameter names', () => {
   expect(() => defineCommand({ args: [argument('first', string(), { required: false }), argument('second', string())], run: () => {} })).toThrow('required argument')
   expect(() => bindCommand('/$id', defineCommand({ params: { id: positional(string()) }, args: [argument('id', string())], run: () => {} }))).toThrow('duplicate argument')
+  expect(() => defineCommand({ args: [{ ...flag(), name: 'force' }], run: () => {} })).toThrow('trailing arguments must be positional')
+})
+
+test('rejects invalid JavaScript invocation inputs before starting the handler', async () => {
+  let called = false
+  const command = bindCommand('/run', defineCommand({ run: () => { called = true } }))
+  const cli = createCLI({ '/run': command }, { name: 'app' })
+  for (const input of [null, 'text', [], { params: null }, { options: [] }, { args: 'text' }]) {
+    await expect(cli.invoke('/run', input)).rejects.toThrow()
+  }
+  expect(called).toBe(false)
+})
+
+test('rejects JSON output that cannot be serialized without writing partial output', async () => {
+  for (const value of [undefined, { toJSON: () => undefined }, { toJSON: () => { throw new Error('private-value') } }]) {
+    const command = bindCommand('/json', defineCommand({ run: ({ ctx }) => ctx.io.json(value) }))
+    const result = await createCLI({ '/json': command }, { name: 'app' }).test({ argv: ['json'] })
+    expect(result.exitCode).toBe(1)
+    expect(result.stdout).toBe('')
+    expect(result.stderr).toContain('Output is not JSON serializable')
+    expect(result.stderr).not.toContain('private-value')
+  }
 })
 
 test('a literal child command takes priority over a parent trailing argument', async () => {
@@ -194,6 +217,7 @@ test('shell parsing validates transformed outputs before executing a handler', a
   const identifier = value('identifier', {
     parse: () => ({ id: 123 }),
     validate: input => {
+      // oxlint-disable-next-line deslop/no-runtime-typeof -- Reject the intentionally invalid custom decoder output.
       if (typeof input.id !== 'string') throw new CLIError('INVALID_ID', 'Invalid identifier')
       return input
     },

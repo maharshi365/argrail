@@ -61,13 +61,24 @@ test('enforces byte limits on piped UTF-8 and rejects invalid encodings', async 
   await expect(invalid).rejects.toThrow('Unable to read text input')
 })
 
+test('rejects unsupported stream chunks and removes input listeners', async () => {
+  const { stream, input } = fixture(false)
+  const pending = input.read()
+  stream.emit('data', { text: 'private-value' })
+  await expect(pending).rejects.toThrow('Unable to read text input')
+  expect(stream.listenerCount('data')).toBe(0)
+  expect(stream.listenerCount('end')).toBe(0)
+  expect(stream.listenerCount('error')).toBe(0)
+})
+
 test('sanitizes choice labels and supports simple numbered selection', async () => {
   const { stream, messages, input } = fixture()
   const selected = input.select({ message: 'Choose', choices: [{ label: 'One\u001b\u0007', value: 'first' }, { label: 'Two', value: 'second' }] })
   stream.emit('data', new TextEncoder().encode('2\r'))
   expect(await selected).toBe('second')
   expect(messages.join('')).toContain('1. One\n')
-  expect(messages.join('')).not.toMatch(/[\u001b\u0007]/)
+  expect(messages.join('')).not.toContain('\u001b')
+  expect(messages.join('')).not.toContain('\u0007')
 })
 
 test('rejects concurrent interactions before printing another prompt', async () => {

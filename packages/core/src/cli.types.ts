@@ -26,21 +26,21 @@ async function contract() {
   const wrong: string = result.deletedId
   await cli.invoke('/users/create', { options: { name: 'Ada' } })
   // @ts-expect-error unknown command paths are rejected
-  cli.invoke('/users/remove', {})
+  await cli.invoke('/users/remove', {})
   // @ts-expect-error dynamic params cannot be omitted
-  cli.invoke('/users/$userId/delete', {})
+  await cli.invoke('/users/$userId/delete', {})
   // @ts-expect-error argument types stay linked to their command
-  cli.invoke('/users/$userId/delete', { params: { userId: '42' } })
+  await cli.invoke('/users/$userId/delete', { params: { userId: '42' } })
   // @ts-expect-error unknown option keys are rejected
-  cli.invoke('/users/$userId/delete', { params: { userId: 42 }, options: { typo: true } })
+  await cli.invoke('/users/$userId/delete', { params: { userId: 42 }, options: { typo: true } })
   // @ts-expect-error choice literals stay narrow
-  cli.invoke('/users/$userId/delete', { params: { userId: 42 }, options: { mode: 'other' } })
+  await cli.invoke('/users/$userId/delete', { params: { userId: 42 }, options: { mode: 'other' } })
   // @ts-expect-error required options cannot be omitted
-  cli.invoke('/users/create', {})
+  await cli.invoke('/users/create', {})
   // @ts-expect-error required options cannot be hidden behind an empty object
-  cli.invoke('/users/create', { options: {} })
+  await cli.invoke('/users/create', { options: {} })
   // @ts-expect-error another command's options cannot widen the selected path
-  cli.invoke('/users/create', { options: { force: true } })
+  await cli.invoke('/users/create', { options: { force: true } })
   return { id, wrong }
 }
 void contract
@@ -62,9 +62,9 @@ createFileCommand('/$id')({
 const ping = createFileCommand('/ping')({ run: () => 'pong' as const })
 const tiny = createCLI({ '/ping': ping }, { name: 'app' })
 // @ts-expect-error commands with no options reject arbitrary option keys
-tiny.invoke('/ping', { options: { extra: true } })
+void tiny.invoke('/ping', { options: { extra: true } })
 // @ts-expect-error static commands reject invented positional keys
-tiny.invoke('/ping', { params: { id: 1 } })
+void tiny.invoke('/ping', { params: { id: 1 } })
 createFileCommand('/bad')({
   // @ts-expect-error named options cannot be positional descriptors
   options: { id: positional(integer()) },
@@ -83,7 +83,7 @@ const team = createFileCommand('/teams/$teamId')({ params: { teamId: positional(
 const unionCLI = createCLI({ [user.path]: user, [team.path]: team }, { name: 'app' })
 const unionPath = Math.random() > 0.5 ? user.path : team.path
 // @ts-expect-error callers must narrow union paths before supplying route-specific input
-unionCLI.invoke(unionPath, {})
+void unionCLI.invoke(unionPath, {})
 // @ts-expect-error a union path cannot accept only one possible command's input
-unionCLI.invoke(unionPath, { params: { userId: 'u_1' } })
-if (unionPath === user.path) unionCLI.invoke(unionPath, { params: { userId: 'u_1' } })
+void unionCLI.invoke(unionPath, { params: { userId: 'u_1' } })
+if (unionPath === user.path) void unionCLI.invoke(unionPath, { params: { userId: 'u_1' } })

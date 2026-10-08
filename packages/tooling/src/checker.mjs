@@ -4,7 +4,7 @@ const require = createRequire(import.meta.url)
 const ts = require('typescript')
 const formatHost = {
   getCanonicalFileName: file => file,
-  getCurrentDirectory: ts.sys.getCurrentDirectory,
+  getCurrentDirectory: () => ts.sys.getCurrentDirectory(),
   getNewLine: () => ts.sys.newLine,
 }
 const host = ts.createWatchCompilerHost(

@@ -26,7 +26,7 @@ export async function discover(directory) {
   await visit(directory)
   const paths = new Set()
   const dynamic = new Map()
-  return files.sort().map(file => {
+  return files.sort(comparePaths).map(file => {
     const path = commandPath(relative(directory, file))
     if (paths.has(path)) throw new Error(`Duplicate command path: ${path}`)
     paths.add(path)
@@ -40,6 +40,10 @@ export async function discover(directory) {
     }
     return { file, path }
   })
+}
+
+function comparePaths(a, b) {
+  return a < b ? -1 : a > b ? 1 : 0
 }
 
 function specifier(from, to) {
@@ -58,6 +62,7 @@ export async function writeIfChanged(file, content) {
 }
 
 function within(root, name, label) {
+  // oxlint-disable-next-line deslop/no-runtime-typeof -- Parse an untrusted configuration path before resolving it.
   if (typeof name !== 'string' || !name || isAbsolute(name)) throw new Error(`${label} must be a relative path`)
   const destination = resolve(root, name)
   const rel = relative(root, destination)
@@ -70,8 +75,11 @@ export async function loadConfig(project) {
   const raw = JSON.parse(await readFile(resolve(root, 'argrail.config.json'), 'utf8'))
   const allowed = new Set(['name', 'version', 'description', 'width', 'commandsDirectory', 'generatedRegistry', 'outDirectory', 'entry'])
   for (const key of Object.keys(raw)) if (!allowed.has(key)) throw new Error(`Unknown configuration key: ${key}`)
+  // Configuration JSON is a parsing boundary; check types before using its fields.
+  /* oxlint-disable deslop/no-runtime-typeof */
   if (typeof raw.name !== 'string' || !/^[a-zA-Z][a-zA-Z0-9-]*$/.test(raw.name)) throw new Error('Configuration requires a valid CLI name')
   for (const key of ['version', 'description']) if (raw[key] !== undefined && typeof raw[key] !== 'string') throw new Error(`${key} must be text`)
+  /* oxlint-enable deslop/no-runtime-typeof */
   if (raw.width !== undefined && (!Number.isInteger(raw.width) || raw.width < 40)) throw new Error('width must be an integer of at least 40')
   const commandsDirectory = within(root, raw.commandsDirectory ?? 'src/commands', 'commandsDirectory')
   const generatedRegistry = within(root, raw.generatedRegistry ?? 'src/commandTree.gen.ts', 'generatedRegistry')
@@ -81,7 +89,7 @@ export async function loadConfig(project) {
   return {
     root, commandsDirectory, generatedRegistry, outDirectory,
     entry: raw.entry === undefined ? undefined : within(root, raw.entry, 'entry'),
-    settings: Object.fromEntries(['name', 'version', 'description', 'width'].filter(key => raw[key] !== undefined).map(key => [key, raw[key]])),
+    settings: Object.fromEntries(['name', 'version', 'description', 'width'].flatMap(key => raw[key] === undefined ? [] : [[key, raw[key]]])),
   }
 }
 
@@ -111,6 +119,7 @@ export async function generate(config) {
 }
 
 export async function addCommand(config, path) {
+  // oxlint-disable-next-line deslop/no-runtime-typeof -- Validate caller input before interpreting it as a command path.
   if (typeof path !== 'string' || !path.startsWith('/')) throw new Error('Use an absolute command path such as /tasks/$id')
   const relativeFile = path === '/' ? 'index.ts' : path.slice(1) + '.ts'
   if (commandPath(relativeFile) !== path) throw new Error('index is reserved for group entry files')
@@ -146,5 +155,5 @@ export async function directorySnapshot(directory) {
     }
   }
   await visit(directory)
-  return entries.sort().join('\n')
+  return entries.sort(comparePaths).join('\n')
 }

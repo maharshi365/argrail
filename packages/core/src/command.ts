@@ -35,9 +35,9 @@ export type AnyDefinition = Omit<Command<string | undefined, any, any, any, any,
 }
 export type AnyCommand = AnyDefinition & { readonly path: string }
 type Group<P extends string | undefined, A extends Arguments, O extends Arguments, Args extends readonly NamedArgument[]> = Omit<Command<P, A, O, never, Args>, 'run'> & { readonly run: undefined }
-type ParamShape<Path extends string> = { [K in ParamNames<Path>]: Argument<unknown, true, 'positional'> }
-type PositionalShape = Record<string, Argument<unknown, true, 'positional'>>
-type OptionShape = Record<string, Argument<unknown, boolean, 'option' | 'flag'>>
+type RouteParams<Path extends string> = { [K in ParamNames<Path>]: Argument<unknown, true, 'positional'> }
+type Positionals = Record<string, Argument<unknown, true, 'positional'>>
+type OptionDefinitions = Record<string, Argument<unknown, boolean, 'option' | 'flag'>>
 type DefinitionConfig<A extends Arguments, O extends Arguments, Args extends readonly NamedArgument[]> = {
   description?: string
   options?: O
@@ -51,10 +51,10 @@ type Configuration<P extends string, A extends Arguments, O extends Arguments, A
   : { params: A & Record<Exclude<keyof A, ParamNames<P>>, never> })
 
 export function createFileCommand<const Path extends string>(path: Path) {
-  function file<const Params extends ParamShape<Path> = ParamShape<Path>, const Options extends OptionShape = {}, const Args extends readonly NamedArgument[] = [], Result = unknown>(
+  function file<const Params extends RouteParams<Path> = RouteParams<Path>, const Options extends OptionDefinitions = {}, const Args extends readonly NamedArgument[] = [], Result = unknown>(
     config: Configuration<Path, Params, Options, Args> & { run: Handler<Params, Options, Args, {}, Result> },
   ): Command<Path, Params, Options, Result, Args>
-  function file<const Params extends ParamShape<Path> = ParamShape<Path>, const Options extends OptionShape = {}, const Args extends readonly NamedArgument[] = []>(
+  function file<const Params extends RouteParams<Path> = RouteParams<Path>, const Options extends OptionDefinitions = {}, const Args extends readonly NamedArgument[] = []>(
     config: Configuration<Path, Params, Options, Args> & { run?: never },
   ): Group<Path, Params, Options, Args>
   function file(config: RuntimeConfig): AnyCommand {
@@ -64,10 +64,10 @@ export function createFileCommand<const Path extends string>(path: Path) {
 }
 
 function author<Services>() {
-  function definition<const Params extends PositionalShape = {}, const Options extends OptionShape = {}, const Args extends readonly NamedArgument[] = [], Result = unknown>(
+  function definition<const Params extends Positionals = {}, const Options extends OptionDefinitions = {}, const Args extends readonly NamedArgument[] = [], Result = unknown>(
     config: DefinitionConfig<Params, Options, Args> & { run: Handler<Params, Options, Args, Services, Result> },
   ): Command<undefined, Params, Options, Result, Args, Services>
-  function definition<const Params extends PositionalShape = {}, const Options extends OptionShape = {}, const Args extends readonly NamedArgument[] = []>(
+  function definition<const Params extends Positionals = {}, const Options extends OptionDefinitions = {}, const Args extends readonly NamedArgument[] = []>(
     config: DefinitionConfig<Params, Options, Args> & { run?: never },
   ): Group<undefined, Params, Options, Args>
   function definition(config: RuntimeConfig): AnyDefinition { return build(undefined, config) }
@@ -116,6 +116,7 @@ function validateDefinition(path: string | undefined, params: Arguments, options
   for (const arg of args) {
     if (argumentNames.has(arg.name)) throw new ValidationError('duplicate argument name')
     if (optional && arg.required) throw new ValidationError('a required argument cannot follow an optional argument')
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- JavaScript callers can supply non-positional descriptors.
     if (arg.kind !== 'positional') throw new ValidationError('trailing arguments must be positional')
     argumentNames.add(arg.name)
     optional ||= !arg.required
@@ -139,7 +140,7 @@ function validateDefinition(path: string | undefined, params: Arguments, options
 
 export function bindCommand<const P extends string, C extends AnyDefinition>(path: P, command: C & {
   readonly path: NoInfer<P> | undefined
-  readonly params: ParamShape<NoInfer<P>> & Record<Exclude<keyof C['params'], ParamNames<NoInfer<P>>>, never>
+  readonly params: RouteParams<NoInfer<P>> & Record<Exclude<keyof C['params'], ParamNames<NoInfer<P>>>, never>
 }): Omit<C, 'path'> & { readonly path: P } {
   if (command.path !== undefined && path !== command.path) throw new ValidationError(`file path ${path} does not match declared path ${command.path}`)
   validateDefinition(path, command.params, command.options, command.args)

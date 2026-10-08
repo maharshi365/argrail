@@ -103,3 +103,5 @@ the workspace. Oxlint uses `oxlint.config.mjs`; Oxfmt uses `.oxfmtrc.json`.
 Both tools exclude generated files and build output.
 Oxlint enables the `ai-deslop` recommended preset, including type-aware linting,
 and `deslop/no-duplicate-types` with default options as an error.
+The safety-comment rule is temporarily disabled. Local exceptions document
+runtime boundary validation that must remain available to JavaScript callers.

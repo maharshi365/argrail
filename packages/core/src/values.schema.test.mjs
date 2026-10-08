@@ -5,6 +5,7 @@ function numericSchema() {
   return {
     '~standard': {
       version: 1, vendor: 'test',
+      // oxlint-disable-next-line deslop/no-runtime-typeof -- The test schema must reject non-string inputs before transforming them.
       validate: input => typeof input === 'string' && /^\d+$/.test(input)
         ? { value: Number(input) }
         : { issues: [{ message: 'Expected digits' }] },
@@ -52,6 +53,7 @@ test('schema issues are usage failures and prevent service and handler initializ
 
 test('callback adapters support libraries without Standard Schema and shell preprocessing', async () => {
   const number = schemaValue('positive number', input => {
+    // oxlint-disable-next-line deslop/no-runtime-typeof -- This callback is the validation boundary for a library without Standard Schema.
     if (typeof input !== 'number' || input < 1) throw new ValidationError('Must be positive')
     return { number: input }
   }, { parse: Number })

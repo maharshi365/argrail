@@ -7,6 +7,8 @@ export default defineConfig({
   options: deslopConfigs.recommended.options,
   rules: {
     ...deslopConfigs.recommended.rules,
+    // Temporarily skipped at the user's request.
+    'deslop/require-safety-comment-for-type-assertion': 'off',
     'deslop/no-duplicate-types': 'error',
   },
   categories: {
