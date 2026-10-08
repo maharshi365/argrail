@@ -18,6 +18,10 @@ The background watcher regenerates the command registry after file adds,
 renames, and deletes. A TypeScript watcher checks source edits. Configuration
 changes also trigger generation. Command handlers are never run automatically.
 
+Dev mode fills empty (or whitespace-only) command files with starter code,
+including positional definitions for `$parameters`. It leaves files with code
+or comments unchanged. `generate`, `check`, and `build` do not edit command sources.
+
 Use `argrail check` for a one-shot check and `argrail build` to check and bundle.
 
 ## Routing rules

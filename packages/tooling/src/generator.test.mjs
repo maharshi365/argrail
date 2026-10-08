@@ -75,6 +75,28 @@ describe('file-based generation', () => {
       expect(await readFile(config.generatedRegistry, 'utf8')).toBe('// user work\n')
     })
   })
+  test('scaffolds only empty command sources when requested', async () => {
+    await project(async (root, config) => {
+      const directory = resolve(root, 'src/commands')
+      await mkdir(resolve(directory, 'tasks/$id'), { recursive: true })
+      const file = resolve(directory, 'tasks/$id/run.ts')
+      await writeFile(file, ' \n\t')
+      const authored = '// Work in progress\n'
+      await writeFile(resolve(directory, 'keep.ts'), authored)
+      await writeFile(resolve(directory, '-helper.ts'), '')
+      await generate(config)
+      expect(await readFile(file, 'utf8')).toBe(' \n\t')
+      await generate(config, { scaffold: true })
+      const content = await readFile(file, 'utf8')
+      expect(content).toContain('export const Command = defineCommand({')
+      expect(content).toContain('id: positional(string())')
+      expect(await readFile(resolve(directory, 'keep.ts'), 'utf8')).toBe(authored)
+      expect(await readFile(resolve(directory, '-helper.ts'), 'utf8')).toBe('')
+      const before = (await stat(file)).mtimeMs
+      await generate(config, { scaffold: true })
+      expect((await stat(file)).mtimeMs).toBe(before)
+    })
+  })
   test('scaffolds pathless commands with positional definitions and refuses overwrites', async () => {
     await project(async (root, config) => {
       const file = await addCommand(config, '/tasks/$id/run')

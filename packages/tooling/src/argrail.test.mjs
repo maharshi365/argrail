@@ -125,6 +125,8 @@ test('background mode tracks route names, source edits, and config changes witho
   }
   try {
     await writeFile(resolve(project, 'src/commands/greet.ts'), (await readFile(resolve(project, 'src/commands/greet.ts'), 'utf8')).replace("ctx.io.stdout.write('Hello ' + options.name + '\\n')", "ctx.io.stdout.write('HANDLER_WAS_EXECUTED')"))
+    await mkdir(resolve(project, 'src/commands/tasks/$id'), { recursive: true })
+    await writeFile(resolve(project, 'src/commands/tasks/$id/run.ts'), '')
     child = spawn(process.execPath, [tooling, 'dev', '--project', project], { cwd: root, stdio: ['ignore', 'pipe', 'pipe'] })
     function collect(data) {
       output += data
@@ -134,9 +136,14 @@ test('background mode tracks route names, source edits, and config changes witho
     child.stdout.on('data', collect)
     child.stderr.on('data', collect)
     await waitFor('Found 0 errors')
+    expect(await readFile(resolve(project, 'src/commands/tasks/$id/run.ts'), 'utf8')).toContain('id: positional(string())')
     await rename(resolve(project, 'src/commands/greet.ts'), resolve(project, 'src/commands/hello.ts'))
     await waitFor('Type checker will refresh')
     expect(await readFile(resolve(project, 'src/commandTree.gen.ts'), 'utf8')).toContain('bindCommand("/hello"')
+    output = ''
+    await writeFile(resolve(project, 'src/commands/new.ts'), '')
+    await waitFor('Type checker will refresh')
+    expect(await readFile(resolve(project, 'src/commands/new.ts'), 'utf8')).toContain('export const Command = defineCommand({')
     output = ''
     await writeFile(resolve(project, 'src/commands/hello.ts'), (await readFile(resolve(project, 'src/commands/hello.ts'), 'utf8')).replace('return { name: options.name }', 'return { name: options.missing }'))
     await waitFor('error TS')

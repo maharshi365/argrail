@@ -72,7 +72,7 @@ async function dev(config) {
       const current = await directorySnapshot(nextConfig.commandsDirectory)
       if (current !== snapshot || nextConfiguration !== configuration) {
         // Generate first: on failure retain the last valid registry and retry next tick.
-        const result = await generate(nextConfig)
+        const result = await generate(nextConfig, { scaffold: true })
         snapshot = current
         configuration = nextConfiguration
         config = nextConfig
@@ -105,7 +105,7 @@ try {
     if (compile && action !== 'build') throw new Error('--compile is only valid for build')
     const config = await loadConfig(project)
     if (action === 'add') console.log(`Created ${await addCommand(config, commandPath)}`)
-    const generated = await generate(config)
+    const generated = await generate(config, { scaffold: action === 'dev' })
     console.log(`${generated.changed ? 'Generated' : 'Up to date:'} ${generated.count} commands.`)
     if (action === 'dev') await dev(config)
     if (action === 'check' || action === 'build') {
