@@ -94,4 +94,12 @@ in the handler, not in argument validation.
 bun test
 bun run check
 bun run check:demo
+bun run lint
+bun run format
 ```
+
+Use `bun run lint` to apply safe lint fixes and `bun run format` to format
+the workspace. Oxlint uses `oxlint.config.mjs`; Oxfmt uses `.oxfmtrc.json`.
+Both tools exclude generated files and build output.
+Oxlint enables the `ai-deslop` recommended preset, including type-aware linting,
+and `deslop/no-duplicate-types` with default options as an error.
