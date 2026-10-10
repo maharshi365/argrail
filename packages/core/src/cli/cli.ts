@@ -177,8 +177,9 @@ function tokenize(argv: readonly string[], entry: CompiledCommand): Tokens {
   return result
 }
 
-function decodeArguments(definitions: Arguments, supplied: Input<Arguments>, label: string, shell = false, schema?: AnyCommand['validateOptions']): Output<Arguments> {
-  // oxlint-disable-next-line deslop/no-runtime-typeof, typescript/no-unnecessary-condition -- JavaScript callers can pass non-object argument bags.
+// oxlint-disable-next-line deslop/no-unknown-parameters -- Argument bags are validated at the invocation boundary.
+function decodeArguments(definitions: Arguments, supplied: unknown, label: string, shell = false, schema?: AnyCommand['validateOptions']): Output<Arguments> {
+  // oxlint-disable-next-line deslop/no-runtime-typeof -- JavaScript callers can pass non-object argument bags.
   if (typeof supplied !== 'object' || supplied === null || Array.isArray(supplied)) {
     throw new ValidationError(`${label} values must be an object`)
   }
@@ -188,7 +189,7 @@ function decodeArguments(definitions: Arguments, supplied: Input<Arguments>, lab
   }
   if (schema) return schemaValue(`${label} values`, schema).validate(supplied)
   for (const [key, descriptor] of Object.entries(definitions)) {
-    const input = Object.prototype.hasOwnProperty.call(supplied, key) ? supplied[key] : undefined
+    const input = Object.prototype.hasOwnProperty.call(supplied, key) ? (supplied as Input<Arguments>)[key] : undefined
     if (input === undefined) {
       if (descriptor.hasDefault) result[key] = descriptor.value.validate(descriptor.defaultValue)
       else if (descriptor.required) throw new ValidationError(`missing ${label}: ${key}`)
@@ -343,8 +344,7 @@ export function createCLI<const R extends Registry>(registry: R & { [P in keyof 
   }
 
   async function invoke<const P extends ExecutablePaths<R>>(path: P & (IsUnion<P> extends true ? never : unknown), input: CommandInput<NoInfer<R[P]>>, execution: ExecutionOptions = {}): Promise<CommandResult<R[P]>> {
-    const command = registry[path]
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- Untyped callers can supply a path absent from the registry.
+    const command = (registry as Registry)[path]
     if (!command?.run) throw new ValidationError('unknown command or command is not executable')
     // oxlint-disable-next-line deslop/no-runtime-typeof -- Validate the public invocation boundary for JavaScript callers.
     if (!input || typeof input !== 'object' || Array.isArray(input)) throw new ValidationError('invocation must be an object')

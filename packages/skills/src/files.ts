@@ -8,6 +8,10 @@ import type { SkillFile } from './types.ts'
 
 export const MAX_FILES = 4096
 export const MAX_BYTES = 32 * 1024 * 1024
+// oxlint-disable-next-line deslop/no-unknown-parameters, deslop/no-unsafe-dictionary-type -- Narrow untrusted JSON and JavaScript objects before reading their fields.
+export function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+}
 export const digest = (value: string | Uint8Array) => createHash('sha256').update(value).digest('hex')
 export function hashFiles(files: readonly SkillFile[]) {
   return digest(

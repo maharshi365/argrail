@@ -1,10 +1,10 @@
 import { readlink } from 'node:fs/promises'
 import { join, resolve, relative, isAbsolute } from 'node:path'
 import { CLIError } from '@argrail/core'
-import { digest, hashFiles, readTree, stat, validateFiles, checkSignal } from './files.ts'
+import { digest, hashFiles, readTree, stat, validateFiles, checkSignal, isRecord } from './files.ts'
 import { resolveTargets, canonicalRoot } from './harnesses/resolve.ts'
 // Public bundles and saved project manifests are untrusted parsing boundaries.
-/* oxlint-disable deslop/no-runtime-typeof, typescript/no-unnecessary-condition */
+/* oxlint-disable deslop/no-runtime-typeof */
 import {
   readReceipt,
   pendingJournal,
@@ -57,28 +57,38 @@ function ownRecord(receipt: Receipt, name: string) {
   return Object.hasOwn(receipt.skills, name) ? receipt.skills[name] : undefined
 }
 
-export function createSkills<const B extends SkillBundle>(bundle: B, settings?: HarnessSettings): SkillManager<B>
-export function createSkills(bundle: SkillBundle, settings: HarnessSettings = {}): SkillManager<SkillBundle> {
+// oxlint-disable-next-line deslop/no-unknown-parameters -- Validate bundles from JavaScript callers before using their typed API.
+function validateBundle(input: unknown): asserts input is SkillBundle {
   // oxlint-disable-next-line deslop/no-runtime-typeof -- Validate the public bundle boundary before creating a manager.
   if (
-    !bundle ||
-    typeof bundle.id !== 'string' ||
-    !/^(?:@[a-z0-9-]+\/)?[a-z0-9][a-z0-9._-]*$/.test(bundle.id) ||
-    !/^[a-f0-9]{64}$/.test(bundle.hash) ||
-    !bundle.skills ||
-    !bundle.groups
+    !isRecord(input) ||
+    typeof input.id !== 'string' ||
+    !/^(?:@[a-z0-9-]+\/)?[a-z0-9][a-z0-9._-]*$/.test(input.id) ||
+    typeof input.hash !== 'string' ||
+    !/^[a-f0-9]{64}$/.test(input.hash) ||
+    !isRecord(input.skills) ||
+    !isRecord(input.groups)
   )
     throw new CLIError('INVALID_SKILL_BUNDLE', 'Invalid skill bundle identity or hash')
   // oxlint-disable-next-line deslop/no-runtime-typeof -- JavaScript callers can pass invalid loaders.
-  for (const [name, skill] of Object.entries(bundle.skills))
+  for (const [name, skill] of Object.entries(input.skills))
     if (
       !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(name) ||
       name.length > 64 ||
+      !isRecord(skill) ||
       skill.name !== name ||
       typeof skill.load !== 'function' ||
+      typeof skill.hash !== 'string' ||
       !/^[a-f0-9]{64}$/.test(skill.hash)
     )
       throw new CLIError('INVALID_SKILL_BUNDLE', `Invalid bundled skill: ${name}`)
+}
+
+export function createSkills<const B extends SkillBundle>(bundle: B, settings?: HarnessSettings): SkillManager<B>
+// oxlint-disable-next-line deslop/no-unknown-parameters -- The public signature stays precise while runtime input is validated.
+export function createSkills(input: unknown, settings: HarnessSettings = {}): SkillManager<SkillBundle> {
+  validateBundle(input)
+  const bundle = input
   const approved = new WeakMap<SkillPlan, string>()
   const completed = new WeakMap<SkillResult, { plan: SkillPlan; snapshot: string }>()
 
@@ -446,18 +456,8 @@ export function createSkills(bundle: SkillBundle, settings: HarnessSettings = {}
     const file = join(project, 'argrail.skills.json')
     const release = await lockRoot(project)
     try {
-      const manifest = (await readJSON<Manifest>(file, { version: 1, bundles: {} }))!
-      // oxlint-disable-next-line deslop/no-runtime-typeof -- Validate the saved project manifest before editing it.
-      if (
-        manifest.version !== 1 ||
-        !manifest.bundles ||
-        typeof manifest.bundles !== 'object' ||
-        Array.isArray(manifest.bundles)
-      )
-        throw new CLIError(
-          'SKILL_MANIFEST',
-          'Unsupported or invalid project manifest; existing file preserved',
-        )
+      const manifest = await readJSON<unknown>(file, { version: 1, bundles: {} })
+      validateManifest(manifest)
       const previous = Object.hasOwn(manifest.bundles, bundle.id)
         ? manifest.bundles[bundle.id]
         : undefined
@@ -481,6 +481,7 @@ export function createSkills(bundle: SkillBundle, settings: HarnessSettings = {}
           harnesses: [...new Set([...(before?.harnesses ?? []), ...root.harnesses])],
           skills: [...new Set([...(before?.skills ?? []), ...selected])],
         }
+        // oxlint-disable-next-line deslop/no-known-value-widening -- Generated paths must also meet the portable manifest path rules.
         validateSavedTarget(target)
         targets.set(path, target)
       }
@@ -491,10 +492,19 @@ export function createSkills(bundle: SkillBundle, settings: HarnessSettings = {}
       await release()
     }
   }
-  function validateSavedTarget(target: SavedTarget) {
+  // oxlint-disable-next-line deslop/no-unknown-parameters -- Validate the saved project manifest before editing it.
+  function validateManifest(manifest: unknown): asserts manifest is Manifest {
+    if (!isRecord(manifest) || manifest.version !== 1 || !isRecord(manifest.bundles))
+      throw new CLIError(
+        'SKILL_MANIFEST',
+        'Unsupported or invalid project manifest; existing file preserved',
+      )
+  }
+  // oxlint-disable-next-line deslop/no-unknown-parameters -- Saved targets are untrusted manifest records.
+  function validateSavedTarget(target: unknown): asserts target is SavedTarget {
     // oxlint-disable-next-line deslop/no-runtime-typeof -- Parse portable paths and selection arrays from the project manifest.
     if (
-      !target ||
+      !isRecord(target) ||
       typeof target.path !== 'string' ||
       !target.path ||
       target.path.includes('\\') ||
@@ -512,12 +522,12 @@ export function createSkills(bundle: SkillBundle, settings: HarnessSettings = {}
   }
   async function restore(project = process.cwd()) {
     project = canonicalRoot(project)
-    const manifest = await readJSON<Manifest>(join(project, 'argrail.skills.json'))
+    const data = await readJSON<unknown>(join(project, 'argrail.skills.json'))
     const entry =
-      manifest?.version === 1 && Object.hasOwn(manifest.bundles ?? {}, bundle.id)
-        ? manifest.bundles[bundle.id]
+      isRecord(data) && data.version === 1 && isRecord(data.bundles) && Object.hasOwn(data.bundles, bundle.id)
+        ? data.bundles[bundle.id]
         : undefined
-    if (!entry || entry.hash !== bundle.hash)
+    if (!isRecord(entry) || entry.hash !== bundle.hash)
       throw new CLIError(
         'SKILL_MANIFEST_BUNDLE',
         'Saved bundle does not match this CLI; use the CLI release that shipped the saved bundle',

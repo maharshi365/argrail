@@ -304,6 +304,28 @@ test('rejects middleware that silently skips the handler', async () => {
   expect(ran).toBe(false)
 })
 
+test('rejects malformed middleware results even after next executes', async () => {
+  for (const result of [undefined, null, false, 0, 'invalid', {}]) {
+    let executions = 0
+    const command = bindCommand(
+      '/run',
+      defineCommand({
+        middleware: [
+          createMiddleware().handler(async ({ next }) => {
+            await next()
+            return result
+          }),
+        ],
+        run: () => ++executions,
+      }),
+    )
+    await expect(createCLI({ '/run': command }, { name: 'app' }).invoke('/run', {})).rejects.toThrow(
+      'Middleware must return the result of next()',
+    )
+    expect(executions).toBe(1)
+  }
+})
+
 test('cancellation stops downstream execution and still runs wrapper cleanup', async () => {
   const controller = new AbortController()
   let cleaned = false,

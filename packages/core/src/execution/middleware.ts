@@ -53,23 +53,22 @@ export async function runMiddleware(
     checkSignal(current.signal)
     const middleware = middlewares[index]
     if (!middleware) return { value: await terminal(current) }
-    let called = false,
-      active = true
+    const state = { called: false, active: true }
     const next: MiddlewareNext = async <Added extends object = {}>(settings?: {
       context: Added
     }) => {
-      if (called || !active)
+      if (state.called || !state.active)
         throw new CLIError(
           'INVALID_MIDDLEWARE',
           'next() can only be called once while middleware is active',
         )
-      called = true
-      const additions = settings === undefined ? {} : settings.context
+      state.called = true
+      const additions: unknown = settings === undefined ? {} : settings.context
       // Context is a public JavaScript boundary; only object bags can be merged.
-      /* oxlint-disable typescript/no-unnecessary-condition, deslop/no-runtime-typeof */
+      /* oxlint-disable deslop/no-runtime-typeof */
       if (!additions || typeof additions !== 'object' || Array.isArray(additions))
         throw new CLIError('INVALID_CONTEXT', 'Middleware context must be an object')
-      /* oxlint-enable typescript/no-unnecessary-condition, deslop/no-runtime-typeof */
+      /* oxlint-enable deslop/no-runtime-typeof */
       for (const key of Reflect.ownKeys(additions).filter(key =>
         Object.prototype.propertyIsEnumerable.call(additions, key),
       )) {
@@ -93,17 +92,16 @@ export async function runMiddleware(
       return { value: result.value }
     }
     try {
-      const result = await middleware.handler({ ctx: current, next })
+      const result: unknown = await middleware.handler({ ctx: current, next })
       // Untyped middleware can omit next() or return a malformed result.
-      // oxlint-disable-next-line typescript/no-unnecessary-condition
-      if (!called || !result || !Object.prototype.hasOwnProperty.call(result, 'value'))
+      if (!state.called || !result || !Object.prototype.hasOwnProperty.call(result, 'value'))
         throw new CLIError(
           'INVALID_MIDDLEWARE',
           'Middleware must return the result of next() or throw an error',
         )
-      return result
+      return result as MiddlewareResult
     } finally {
-      active = false
+      state.active = false
     }
   }
   const result = await dispatch(0, ctx)

@@ -5,28 +5,34 @@ import { CLIError } from '@argrail/core'
 import registry from './registry.gen.json' with { type: 'json' }
 import type { PathRule, HarnessRegistry } from './types.ts'
 import type { HarnessSettings, SkillTarget, Harness, HarnessRoot } from '../types.ts'
+import { isRecord } from '../files.ts'
 // JavaScript callers can supply untrusted target objects.
-/* oxlint-disable deslop/no-runtime-typeof, typescript/no-unnecessary-condition */
+/* oxlint-disable deslop/no-runtime-typeof */
 
 function evaluate(rule: PathRule | null, home: string, environment: Record<string, string | undefined>): string | undefined {
   if (!rule) return undefined
-  if (rule.kind === 'literal') return rule.value
-  if (rule.kind === 'home') return home
-  if (rule.kind === 'environment')
-    return (
-      environment[rule.name]?.trim() ||
-      (rule.fallback ? evaluate(rule.fallback, home, environment) : undefined)
-    )
-  if (rule.kind === 'join')
-    return join(...rule.parts.map(part => evaluate(part, home, environment)!))
-  if (rule.kind === 'firstExisting')
-    return evaluate(
-      rule.paths.find(candidate => existsSync(evaluate(candidate.exists, home, environment)!))
-        ?.path ?? rule.fallback,
-      home,
-      environment,
-    )
-  throw new CLIError('HARNESS_RULE', 'Unsupported harness path rule')
+  switch (rule.kind) {
+    case 'literal':
+      return rule.value
+    case 'home':
+      return home
+    case 'environment':
+      return (
+        environment[rule.name]?.trim() ||
+        (rule.fallback ? evaluate(rule.fallback, home, environment) : undefined)
+      )
+    case 'join':
+      return join(...rule.parts.map(part => evaluate(part, home, environment)!))
+    case 'firstExisting':
+      return evaluate(
+        rule.paths.find(candidate => existsSync(evaluate(candidate.exists, home, environment)!))
+          ?.path ?? rule.fallback,
+        home,
+        environment,
+      )
+    default:
+      throw new CLIError('HARNESS_RULE', 'Unsupported harness path rule')
+  }
 }
 
 export function canonicalRoot(path: string): string {
@@ -57,9 +63,10 @@ export function listHarnesses({
   })
 }
 
-export function resolveTargets(target: SkillTarget, settings: HarnessSettings = {}): HarnessRoot[] {
-  // oxlint-disable-next-line deslop/no-runtime-typeof -- Parse the public target boundary.
-  if (!target || typeof target !== 'object')
+export function resolveTargets(target: SkillTarget, settings?: HarnessSettings): HarnessRoot[]
+// oxlint-disable-next-line deslop/no-unknown-parameters -- Validate JavaScript target inputs before resolving paths.
+export function resolveTargets(target: unknown, settings: HarnessSettings = {}): HarnessRoot[] {
+  if (!isRecord(target))
     throw new CLIError('SKILL_TARGET', 'An installation target is required')
   if (target.path !== undefined) {
     // oxlint-disable-next-line deslop/no-runtime-typeof -- Custom destinations must be text before path resolution.
@@ -75,13 +82,15 @@ export function resolveTargets(target: SkillTarget, settings: HarnessSettings = 
   }
   const scope = target.scope ?? 'project'
   if (
-    !['project', 'global'].includes(scope) ||
+    (scope !== 'project' && scope !== 'global') ||
     (scope === 'global' && target.project !== undefined)
   )
     throw new CLIError('SKILL_TARGET', 'Global and project scope cannot be combined')
   if (!Array.isArray(target.harnesses) || !target.harnesses.length)
     throw new CLIError('SKILL_TARGET', 'Select at least one harness with --harness')
   const harnesses = listHarnesses({ ...settings, scope })
+  if (target.project !== undefined && typeof target.project !== 'string')
+    throw new CLIError('SKILL_TARGET', 'Project path must be text')
   const project = resolve(target.project ?? process.cwd())
   const destinations = new Map<string, HarnessRoot>()
   for (const id of new Set(target.harnesses)) {

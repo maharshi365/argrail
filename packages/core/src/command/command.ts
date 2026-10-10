@@ -260,8 +260,8 @@ function build(path: string | undefined, config: RuntimeConfig): AnyDefinition {
           for (const field of Object.keys(settings)) {
             if (field !== 'type' && field !== 'short' && field !== 'description' && field !== 'negate') throw new ValidationError(`unknown optionConfig setting: ${field}`)
           }
-          // oxlint-disable-next-line typescript/no-unnecessary-condition -- JavaScript callers can supply an unsupported option type.
-          if (settings.type !== undefined && settings.type !== 'value' && settings.type !== 'flag')
+          const type: unknown = settings.type
+          if (type !== undefined && type !== 'value' && type !== 'flag')
             throw new ValidationError(`invalid option type: ${key}`)
           if (settings.negate !== undefined && settings.type !== 'flag')
             throw new ValidationError(`negate requires a flag: ${key}`)
@@ -339,8 +339,8 @@ function validateDefinition(path: string | undefined, params: Arguments, options
     if (args.some((candidate, index) => candidate.variadic && index !== args.length - 1)) throw new ValidationError('variadic argument must be last')
     if (argumentNames.has(arg.name)) throw new ValidationError('duplicate argument name')
     if (optional && arg.required) throw new ValidationError('a required argument cannot follow an optional argument')
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- JavaScript callers can supply non-positional descriptors.
-    if (arg.kind !== 'positional') throw new ValidationError('trailing arguments must be positional')
+    const kind: unknown = arg.kind
+    if (kind !== 'positional') throw new ValidationError('trailing arguments must be positional')
     argumentNames.add(arg.name)
     optional ||= !arg.required
   }

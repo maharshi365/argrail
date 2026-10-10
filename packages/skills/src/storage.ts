@@ -2,12 +2,12 @@ import { randomUUID } from 'node:crypto'
 import { mkdir, readFile, writeFile, rename, rm } from 'node:fs/promises'
 import { join, dirname } from 'node:path'
 import { CLIError } from '@argrail/core'
-import { stat, safePath, hashFiles, readTree } from './files.ts'
+import { stat, safePath, hashFiles, readTree, isRecord } from './files.ts'
 import { canonicalRoot } from './harnesses/resolve.ts'
 import type { Receipt, Journal, Change } from './state.ts'
 
 // Receipts, lock files, and journals are untrusted JSON parsing boundaries.
-/* oxlint-disable deslop/no-runtime-typeof, typescript/no-unnecessary-condition */
+/* oxlint-disable deslop/no-runtime-typeof */
 
 export const receiptName = '.argrail-skills.json'
 const journalName = '.argrail-skills-journal.json'
@@ -36,21 +36,24 @@ export async function writeJSON(file: string, data: unknown) {
   }
 }
 export async function readReceipt(root: string) {
-  const receipt = await readJSON<Receipt>(join(root, receiptName), { version: 1, skills: {} })
-  return validateReceipt(receipt, root)
+  const receipt = await readJSON<unknown>(join(root, receiptName), { version: 1, skills: {} })
+  validateReceipt(receipt, root)
+  return receipt
 }
-function validateReceipt(receipt: Receipt | undefined, root: string): Receipt {
-  if (receipt?.version !== 1)
+// oxlint-disable-next-line deslop/no-unknown-parameters -- Receipts are untrusted JSON until validated.
+function validateReceipt(receipt: unknown, root: string): asserts receipt is Receipt {
+  if (!isRecord(receipt) || receipt.version !== 1)
     throw new CLIError(
       'SKILL_STATE_VERSION',
       `Unsupported receipt version in ${root}; existing records were preserved`,
     )
-  if (!receipt.skills || typeof receipt.skills !== 'object' || Array.isArray(receipt.skills))
+  if (!isRecord(receipt.skills))
     throw new CLIError('SKILL_STATE', `Invalid receipt in ${root}`)
   for (const [name, entry] of Object.entries(receipt.skills)) {
     if (
       !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(name) ||
-      !entry ||
+      !isRecord(entry) ||
+      typeof entry.hash !== 'string' ||
       !/^[a-f0-9]{64}$/.test(entry.hash) ||
       !Array.isArray(entry.files) ||
       !Array.isArray(entry.owners) ||
@@ -64,14 +67,13 @@ function validateReceipt(receipt: Receipt | undefined, root: string): Receipt {
     }
     for (const owner of entry.owners)
       if (
-        !owner ||
+        !isRecord(owner) ||
         typeof owner.id !== 'string' ||
         !Array.isArray(owner.harnesses) ||
         owner.harnesses.some(id => typeof id !== 'string')
       )
         throw new CLIError('SKILL_STATE', `Invalid ownership record in ${root}`)
   }
-  return receipt
 }
 export async function pendingJournal(root: string) {
   return !!(await stat(join(root, journalName)))
@@ -118,12 +120,15 @@ export async function lockRoot(root: string) {
   throw new CLIError('SKILL_LOCKED', `Could not lock ${root}`)
 }
 
-function validateJournal(journal: Journal | undefined): asserts journal is Journal {
+// oxlint-disable-next-line deslop/no-unknown-parameters -- Recovery journals are untrusted JSON until validated.
+function validateJournal(journal: unknown): asserts journal is Journal {
   if (
-    journal?.version !== 1 ||
+    !isRecord(journal) ||
+    journal.version !== 1 ||
+    typeof journal.id !== 'string' ||
     !/^[a-f0-9-]{36}$/.test(journal.id) ||
     !Array.isArray(journal.entries) ||
-    !journal.before ||
+    !isRecord(journal.before) ||
     journal.before.version !== 1
   )
     throw new CLIError('SKILL_RECOVERY', 'Unrecognized recovery journal; no files were changed')
@@ -151,6 +156,7 @@ function validateJournal(journal: Journal | undefined): asserts journal is Journ
   }
 }
 async function recoveryDirectory(root: string, journal: Journal) {
+  // oxlint-disable-next-line deslop/no-known-value-widening -- Exported rollback can receive an unvalidated journal from JavaScript.
   validateJournal(journal)
   const work = join(root, workName, journal.id)
   for (const path of [join(root, workName), work, join(work, 'old'), join(work, 'stage')]) {
@@ -226,7 +232,7 @@ export async function rollback(root: string, journal: Journal) {
   await rm(work, { recursive: true, force: true })
 }
 export async function recoverRoot(root: string) {
-  const journal = await readJSON<Journal>(join(root, journalName))
+  const journal = await readJSON<unknown>(join(root, journalName))
   if (!journal) return false
   validateJournal(journal)
   if (journal.committed) {

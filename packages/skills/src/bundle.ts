@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { parseDocument } from 'yaml'
-import { digest, hashFiles, readTree, validateFiles } from './files.ts'
+import { digest, hashFiles, readTree, validateFiles, isRecord } from './files.ts'
 import type { SkillBundle, SkillFile } from './types.ts'
 
 export interface SkillMetadata {
@@ -17,7 +17,7 @@ export interface SkillMetadata {
 export interface SkillBuildConfig { id: string; directory: string; groups?: SkillBundle['groups'] }
 
 // YAML and author configuration are untrusted parsing boundaries.
-/* oxlint-disable deslop/no-runtime-typeof, typescript/no-unnecessary-condition */
+/* oxlint-disable deslop/no-runtime-typeof */
 
 const namePattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
 const execute = promisify(execFile)
@@ -115,10 +115,10 @@ export async function discoverSkills(config: SkillBuildConfig) {
   }
   if (!Object.keys(skills).length) throw new Error(`${config.directory}: no skills found`)
   const groups = config.groups ?? {}
-  for (const [name, group] of Object.entries(groups)) {
+  for (const [name, group] of Object.entries<unknown>(groups)) {
     if (
       !namePattern.test(name) ||
-      !group ||
+      !isRecord(group) ||
       !Array.isArray(group.skills) ||
       !group.skills.length ||
       typeof group.description !== 'string' ||

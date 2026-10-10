@@ -62,6 +62,40 @@ const request = (root, action = 'add', extra = {}) => ({
   ...extra,
 })
 
+test('rejects malformed JavaScript bundle inputs', () => {
+  for (const input of [
+    null,
+    {},
+    { ...bundle(), skills: null },
+    { ...bundle(), groups: null },
+    { ...bundle(), skills: { 'test-skill': null } },
+    { ...bundle(), skills: { 'test-skill': { ...bundle().skills['test-skill'], load: 'invalid' } } },
+  ]) {
+    expect(() => createSkills(input)).toThrow(/Invalid skill bundle|Invalid bundled skill/)
+  }
+})
+
+test('rejects malformed receipts without changing the saved file', () =>
+  fixture(async root => {
+    const manager = createSkills(bundle())
+    const destination = resolve(root, 'skills')
+    await mkdir(destination)
+    const file = resolve(destination, '.argrail-skills.json')
+    for (const receipt of [
+      { version: 1, skills: null },
+      { version: 1, skills: { 'test-skill': null } },
+      {
+        version: 1,
+        skills: { 'test-skill': { hash: bundle().hash, files: [], owners: [null] } },
+      },
+    ]) {
+      const text = JSON.stringify(receipt)
+      await writeFile(file, text)
+      await expect(manager.plan(request(root))).rejects.toThrow(/Invalid receipt|Invalid ownership/)
+      expect(await readFile(file, 'utf8')).toBe(text)
+    }
+  }))
+
 test('installs complete resources, repeats as a no-op, and removes only owned content', () =>
   fixture(async root => {
     const manager = createSkills(bundle())
