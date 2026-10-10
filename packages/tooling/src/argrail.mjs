@@ -4,7 +4,7 @@ import { mkdir, chmod, readFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createRequire } from 'node:module'
-import { loadConfig, generate, directorySnapshot, addCommand } from './generator.mjs'
+import { loadConfig, generate, directorySnapshot, skillsSnapshot, addCommand } from './generator.mjs'
 
 const require = createRequire(import.meta.url)
 const args = process.argv.slice(2)
@@ -59,6 +59,7 @@ async function dev(config) {
     cwd: config.root, stdio: ['pipe', 'inherit', 'inherit'],
   })
   let snapshot = await directorySnapshot(config.commandsDirectory)
+  let skillSnapshot = await skillsSnapshot(config)
   let configuration = await readFile(resolve(config.root, 'argrail.config.json'), 'utf8')
   let busy = false
   let stopped = false
@@ -70,10 +71,12 @@ async function dev(config) {
       const nextConfiguration = await readFile(resolve(config.root, 'argrail.config.json'), 'utf8')
       const nextConfig = nextConfiguration === configuration ? config : await loadConfig(config.root)
       const current = await directorySnapshot(nextConfig.commandsDirectory)
-      if (current !== snapshot || nextConfiguration !== configuration) {
+      const currentSkills = await skillsSnapshot(nextConfig)
+      if (current !== snapshot || currentSkills !== skillSnapshot || nextConfiguration !== configuration) {
         // Generate first: on failure retain the last valid registry and retry next tick.
         const result = await generate(nextConfig, { scaffold: true })
         snapshot = current
+        skillSnapshot = currentSkills
         configuration = nextConfiguration
         config = nextConfig
         dev.lastError = undefined

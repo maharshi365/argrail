@@ -2,5 +2,6 @@
   "name": "@argrail/tooling",
   "version": "0.1.0",
   "type": "module",
-  "bin": { "argrail": "./src/argrail.mjs" }
+  "bin": { "argrail": "./src/argrail.mjs" },
+  "dependencies": { "@argrail/skills": "workspace:*", "typescript": "^5.9.3" }
 }

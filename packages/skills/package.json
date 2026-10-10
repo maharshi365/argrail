@@ -1,0 +1,16 @@
+{
+  "name": "@argrail/skills",
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/index.d.ts",
+      "default": "./src/index.mjs"
+    },
+    "./build": "./src/bundle.mjs"
+  },
+  "dependencies": {
+    "@argrail/core": "workspace:*",
+    "yaml": "^2.8.1"
+  }
+}

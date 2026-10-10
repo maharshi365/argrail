@@ -150,6 +150,26 @@ authorize their own requests.
 
 ## Tooling
 
+### Bundled skills
+
+Add a `/skills` route (`src/commands/skills.ts` or `skills/index.ts`) and standard
+`skills/<name>/SKILL.md` directories. No skills configuration is needed. Install
+`@argrail/skills` alongside `@argrail/core`. Argrail validates and embeds the complete skill files, exports
+`skillTree` from the existing generated registry, and exposes management commands:
+
+```sh
+app skills add --all --harness claude-code --yes
+app skills status --harness claude-code
+app skills update --all --harness claude-code --yes
+app skills remove --all --harness claude-code --yes
+```
+
+This distributes only skills bundled by the CLI author. It does not browse or
+download third-party skills. See [Bundled skills](docs/SKILLS.md) for groups,
+global/custom targets, conflict backups, recovery, and project save/restore.
+
+### Build and development
+
 `@argrail/core` provides the command API and runtime. `@argrail/tooling` generates
 the registry, checks projects, and builds the CLI.
 

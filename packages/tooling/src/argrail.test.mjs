@@ -58,6 +58,47 @@ test('builds a CLI that runs without source files or installed framework package
   }
 }, 30000)
 
+test('bundles skills into JS and native CLIs that install without author source files', async () => {
+  const project = await setup()
+  const isolated = await mkdtemp(resolve(process.env.TEMP ? resolve(process.env.TEMP, 'opencode') : tmpdir(), 'argrail-skill-cli-'))
+  try {
+    await symlink(resolve(root, 'packages/skills'), resolve(project, 'node_modules/@argrail/skills'), process.platform === 'win32' ? 'junction' : 'dir')
+    await writeFile(resolve(project, 'package.json'), JSON.stringify({ name: '@test/fixture', type: 'module' }))
+    await writeFile(resolve(project, 'src/commands/skills.ts'), `import { defineCommand, createMiddleware } from '@argrail/core'
+const middleware = createMiddleware().handler(({ ctx, next }) => { ctx.io.stderr.write('skills middleware\\n'); return next() })
+export const Command = defineCommand({ description: 'Manage bundled skills.', middleware: [middleware] })
+export const SkillGroups = { starter: { description: 'Starter skills', skills: ['test-skill'] } } as const\n`)
+    await mkdir(resolve(project, 'skills/test-skill/assets'), { recursive: true })
+    await writeFile(resolve(project, 'skills/test-skill/SKILL.md'), '---\nname: test-skill\ndescription: Test bundled resources\n---\n')
+    await writeFile(resolve(project, 'skills/test-skill/assets/data.bin'), new Uint8Array([0, 255, 42]))
+    for (const native of [false, true]) {
+      const built = await run(process.execPath, [tooling, 'build', '--project', project, ...(native ? ['--compile'] : [])], root)
+      expect(built.code, built.stdout + built.stderr).toBe(0)
+      const filename = native ? 'fixture' + (process.platform === 'win32' ? '.exe' : '') : 'fixture.js'
+      const executable = resolve(isolated, native ? filename : 'fixture.mjs')
+      await writeFile(executable, await readFile(resolve(project, 'dist', filename)), { mode: 0o755 })
+      const command = native ? executable : 'node'
+      const prefix = native ? [] : [executable]
+      const target = resolve(isolated, native ? 'native-skills' : 'js-skills')
+      const installed = await run(command, [...prefix, 'skills', 'add', '--group', 'starter', '--path', target, '--yes', '--json'], isolated)
+      expect(installed.code, installed.stderr + installed.stdout).toBe(0)
+      expect(installed.stderr).toContain('skills middleware')
+      expect(JSON.parse(installed.stdout).bundleId).toBe('@test/fixture')
+      expect(JSON.parse(installed.stdout).items[0].status).toBe('installed')
+      expect(await readFile(resolve(target, 'test-skill/assets/data.bin'))).toEqual(Buffer.from([0, 255, 42]))
+      const status = await run(command, [...prefix, 'skills', 'status', '--path', target, '--json'], isolated)
+      expect(JSON.parse(status.stdout).items[0].status).toBe('current')
+      const help = await run(command, [...prefix, 'help', 'skills', 'add'], isolated)
+      expect(help.stdout).toContain('[names...]')
+      expect(help.stdout).toContain('--harness')
+      expect(help.stderr).not.toContain('skills middleware')
+    }
+  } finally {
+    await rm(project, { recursive: true, force: true })
+    await rm(isolated, { recursive: true, force: true })
+  }
+}, 60000)
+
 test('custom entry points preserve application services and read portable stdin in the built CLI', async () => {
   const project = await setup()
   try {

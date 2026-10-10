@@ -2,7 +2,7 @@ import { describe, test, expect } from 'bun:test'
 import { mkdtemp, mkdir, writeFile, readFile, rename, rm, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { resolve } from 'node:path'
-import { commandPath, discover, generate, loadConfig, addCommand } from './generator.mjs'
+import { commandPath, discover, generate, loadConfig, addCommand, skillsSnapshot } from './generator.mjs'
 
 async function project(run) {
   const root = await mkdtemp(resolve(process.env.TEMP ? resolve(process.env.TEMP, 'opencode') : tmpdir(), 'argrail-test-'))
@@ -14,6 +14,102 @@ async function project(run) {
 }
 
 describe('file-based generation', () => {
+  test('generates one public skill registry with a lazy embedded payload and tracks resource changes', async () => {
+    await project(async root => {
+      await writeFile(resolve(root, 'package.json'), JSON.stringify({ name: '@test/app' }))
+      await writeFile(resolve(root, 'src/commands/skills.ts'), 'export const Command = {}; throw new Error("route discovery must not execute modules")')
+      await mkdir(resolve(root, 'skills/test-skill/assets'), { recursive: true })
+      await writeFile(resolve(root, 'skills/test-skill/SKILL.md'), '---\nname: test-skill\ndescription: Test\n---\n')
+      await writeFile(resolve(root, 'skills/test-skill/assets/data.bin'), new Uint8Array([0, 255]))
+      await writeFile(resolve(root, 'src/commands/run.ts'), '')
+      const config = await loadConfig(root)
+      const first = await generate(config)
+      const registry = await readFile(config.generatedRegistry, 'utf8')
+      expect(registry).toContain('export const skillTree')
+      expect(registry).toContain('createSkillsCommands(skillTree')
+      expect(registry).toContain('await import(')
+      const payload = await readFile(resolve(root, '.argrail/skills.bundle.ts'), 'utf8')
+      expect(payload).toContain('assets/data.bin')
+      expect((await generate(config)).changed).toBe(false)
+      await writeFile(resolve(root, 'skills/test-skill/assets/data.bin'), new Uint8Array([0, 254]))
+      expect((await generate(config)).changed).toBe(true)
+      expect(await readFile(config.generatedRegistry, 'utf8')).not.toBe(registry)
+      expect(registry).toContain('"@test/app"')
+      expect(first.count).toBe(10)
+    })
+  })
+  test('rejects skill command collisions before changing generated output', async () => {
+    await project(async root => {
+      await writeFile(resolve(root, 'src/commands/skills.ts'), '')
+      await mkdir(resolve(root, 'skills/test-skill'), { recursive: true })
+      await writeFile(resolve(root, 'skills/test-skill/SKILL.md'), '---\nname: test-skill\ndescription: Test\n---\n')
+      await mkdir(resolve(root, 'src/commands/skills'))
+      await writeFile(resolve(root, 'src/commands/skills/add.ts'), '')
+      await expect(generate(await loadConfig(root))).rejects.toThrow('skills command mount')
+    })
+  })
+  test('skills resources alone do not expose commands; adding and removing the route controls bundling', async () => {
+    await project(async (root, config) => {
+      await writeFile(resolve(root, 'src/commands/run.ts'), '')
+      await mkdir(resolve(root, 'skills/test-skill'), { recursive: true })
+      await writeFile(resolve(root, 'skills/test-skill/SKILL.md'), 'invalid until the route opts in')
+      expect((await generate(config)).count).toBe(1)
+      expect(await readFile(config.generatedRegistry, 'utf8')).not.toContain('skillTree')
+      expect(await skillsSnapshot(config)).toBe('')
+      await writeFile(resolve(root, 'skills/test-skill/SKILL.md'), '---\nname: test-skill\ndescription: Test\n---\n')
+      await writeFile(resolve(root, 'src/commands/skills.ts'), '')
+      expect((await generate(config)).count).toBe(10)
+      expect(await readFile(config.generatedRegistry, 'utf8')).toContain('id: "app"')
+      await rm(resolve(root, 'src/commands/skills.ts'))
+      expect((await generate(config)).count).toBe(1)
+      expect(await readFile(config.generatedRegistry, 'utf8')).not.toContain('createSkillsCommands')
+    })
+  })
+  test('index and pathless skill routes retain their structural middleware ancestry', async () => {
+    await project(async (root, config) => {
+      await mkdir(resolve(root, 'src/commands/_protected/skills'), { recursive: true })
+      for (const file of ['__root.ts', '_protected/__group.ts', '_protected/skills/index.ts']) await writeFile(resolve(root, 'src/commands', file), '')
+      await mkdir(resolve(root, 'skills/test-skill'), { recursive: true })
+      await writeFile(resolve(root, 'skills/test-skill/SKILL.md'), '---\nname: test-skill\ndescription: Test\n---\n')
+      expect((await generate(config)).count).toBe(9)
+      expect(await readFile(config.generatedRegistry, 'utf8')).toContain('createSkillsCommands(skillTree, "skills", [group0, group1, command0])')
+    })
+  })
+  test('route-local groups are read without executing modules and edits change the watched bundle', async () => {
+    await project(async (root, config) => {
+      const route = resolve(root, 'src/commands/skills.ts')
+      const source = `throw new Error('must not execute'); export const Command = {}; export const SkillGroups = { starter: { description: 'Starter', skills: ['test-skill'] } } as const`
+      await writeFile(route, source)
+      await mkdir(resolve(root, 'skills/test-skill'), { recursive: true })
+      await writeFile(resolve(root, 'skills/test-skill/SKILL.md'), '---\nname: test-skill\ndescription: Test\n---\n')
+      await generate(config)
+      const initial = await skillsSnapshot(config)
+      expect(await readFile(config.generatedRegistry, 'utf8')).toContain('"starter":{"description":"Starter","skills":["test-skill"]}')
+      await writeFile(route, source.replace("'Starter'", "'Changed'"))
+      expect(await skillsSnapshot(config)).not.toBe(initial)
+      await writeFile(route, source.replace("['test-skill']", "['unknown']"))
+      await expect(generate(config)).rejects.toThrow('unknown skill unknown')
+      await writeFile(route, "export const Command = {}; export const SkillGroups = getGroups()")
+      await expect(generate(config)).rejects.toThrow('static object literal')
+      await writeFile(route, "export const Command = {}; export const SkillGroups = []")
+      await expect(generate(config)).rejects.toThrow('static object literal')
+    })
+  })
+  test('bundle identity changes invalidate the watched bundle and invalid package names preserve output', async () => {
+    await project(async (root, config) => {
+      await writeFile(resolve(root, 'src/commands/skills.ts'), '')
+      await mkdir(resolve(root, 'skills/test-skill'), { recursive: true })
+      await writeFile(resolve(root, 'skills/test-skill/SKILL.md'), '---\nname: test-skill\ndescription: Test\n---\n')
+      const initial = await skillsSnapshot(config)
+      await writeFile(resolve(root, 'package.json'), JSON.stringify({ name: '@test/cli' }))
+      expect(await skillsSnapshot(config)).not.toBe(initial)
+      await generate(config)
+      const registry = await readFile(config.generatedRegistry, 'utf8')
+      await writeFile(resolve(root, 'package.json'), JSON.stringify({ name: 'invalid identity' }))
+      await expect(generate(config)).rejects.toThrow('stable package.json name')
+      expect(await readFile(config.generatedRegistry, 'utf8')).toBe(registry)
+    })
+  })
   test('maps nested paths, index files, and dynamic arguments', () => {
     expect(commandPath('index.ts')).toBe('/')
     expect(commandPath('users/index.ts')).toBe('/users')

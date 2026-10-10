@@ -112,6 +112,9 @@ export interface Argument<T, Required extends boolean = boolean, Kind extends 'p
   readonly hasDefault: boolean
   readonly defaultValue: Input | undefined
   readonly negate: boolean
+  readonly repeated?: boolean
+  readonly variadic?: boolean
+  readonly element?: Value<unknown>
 }
 
 type Settings = { description?: string; short?: string }
@@ -171,4 +174,23 @@ export function argument(name: string, parser: Value<unknown>, settings: { defau
     required: hasDefault ? false : settings.required ?? true,
     hasDefault, defaultValue: hasDefault ? settings.default : undefined,
   }
+}
+
+function collection<T, Input>(parser: Value<T, Input>): Value<T[], readonly Input[]> {
+  return {
+    label: `${parser.label}[]`,
+    parse: text => [parser.parse(text)],
+    validate: input => {
+      if (!Array.isArray(input)) throw new ValidationError('expected an array')
+      return input.map(item => parser.validate(item))
+    },
+  }
+}
+
+export function repeatableOption<T, Input = T>(parser: Value<T, Input>, settings: Settings = {}): Argument<T[], false, 'option', readonly Input[]> {
+  return { ...option(collection(parser), { ...settings, default: [] }), repeated: true, element: parser }
+}
+
+export function variadicArgument<const N extends string, T, Input = T>(name: N, parser: Value<T, Input>, settings: { description?: string } = {}): NamedArgument<N, T[], false, readonly Input[]> {
+  return { ...argument(name, collection(parser), { ...settings, default: [] }), variadic: true, element: parser }
 }

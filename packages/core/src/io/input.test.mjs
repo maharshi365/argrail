@@ -17,6 +17,32 @@ function fixture(terminal = true) {
   return { stream, messages, controller, input: createInput(io, controller.signal) }
 }
 
+test('confirmation distinguishes refusal, default acceptance, and invalid scripted answers', async () => {
+  const { input, stream } = fixture()
+  const pending = input.confirm({ message: 'Proceed?' })
+  stream.emit('data', new TextEncoder().encode('\r'))
+  expect(await pending).toBe(false)
+  const io = createIO({ stdin: { isTTY: true, async read() { return '' } }, stderr: { write() {} }, stdout: { write() {} }, interactive: true })
+  expect(await createInput(io, new AbortController().signal, [true]).confirm({ message: 'Proceed?' })).toBe(true)
+  await expect(createInput(io, new AbortController().signal, ['yes']).confirm({ message: 'Proceed?' })).rejects.toThrow('boolean')
+  await expect(fixture(false).input.confirm({ message: 'Proceed?' })).rejects.toThrow('interactive terminal')
+})
+
+test('multiselect supports all, descriptions, disabled reasons, and validates scripted selections', async () => {
+  const choices = [{ label: 'One', value: 'one', description: 'First skill' }, { label: 'Two', value: 'two' }, { label: 'Three', value: 'three', disabled: 'Global not supported' }]
+  const { input, stream, messages } = fixture()
+  const pending = input.multiselect({ message: 'Skills', choices, min: 1 })
+  stream.emit('data', new TextEncoder().encode('all\r'))
+  expect(await pending).toEqual(['one', 'two'])
+  expect(messages.join('')).toContain('First skill')
+  expect(messages.join('')).toContain('Global not supported')
+  const io = createIO({ stdin: { isTTY: true, async read() { return '' } }, stderr: { write() {} }, stdout: { write() {} }, interactive: true })
+  for (const answer of [['three'], ['one', 'one'], [], ['unknown']]) {
+    await expect(createInput(io, new AbortController().signal, [answer]).multiselect({ message: 'Skills', choices, min: 1 })).rejects.toThrow()
+  }
+  expect(await createInput(io, new AbortController().signal, [['two', 'one']]).multiselect({ message: 'Skills', choices })).toEqual(['two', 'one'])
+})
+
 test.each(['success', 'cancel', 'end', 'error', 'limit', 'signal'])(
   'hidden input restores terminal state and removes listeners after %s', async mode => {
     const { stream, messages, controller, input } = fixture()

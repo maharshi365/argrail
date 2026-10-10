@@ -10,5 +10,5 @@
     "noEmit": true,
     "skipLibCheck": false
   },
-  "include": ["packages/core/src/**/*.ts"]
+  "include": ["packages/core/src/**/*.ts", "packages/skills/src/**/*.ts"]
 }

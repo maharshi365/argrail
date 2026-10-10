@@ -2,5 +2,5 @@
   "name": "@argrail/demo",
   "private": true,
   "type": "module",
-  "dependencies": { "@argrail/core": "workspace:*" }
+  "dependencies": { "@argrail/core": "workspace:*", "@argrail/skills": "workspace:*" }
 }

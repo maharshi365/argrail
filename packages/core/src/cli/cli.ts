@@ -52,7 +52,7 @@ export interface RunResult {
 
 interface Tokens {
   words: string[]
-  options: Record<string, string | boolean | undefined>
+  options: Record<string, string | string[] | boolean | undefined>
   errors: string[]
   help: boolean
 }
@@ -152,18 +152,24 @@ function tokenize(argv: readonly string[], entry: CompiledCommand): Tokens {
     const alias = entry.aliases.get(name)
     if (!alias) result.errors.push('Unknown option. Run --help to see supported options.')
     if (!entry.arities.has(name)) continue
-    if (alias && Object.prototype.hasOwnProperty.call(result.options, alias.key)) result.errors.push(`option ${name} was supplied more than once`)
+    const repeated = alias && entry.command.options[alias.key]?.repeated
+    if (alias && !repeated && Object.prototype.hasOwnProperty.call(result.options, alias.key)) result.errors.push(`option ${name} was supplied more than once`)
+    function assign(text: string) {
+      if (!alias) return
+      if (repeated) result.options[alias.key] = [...((result.options[alias.key] ?? []) as string[]), text]
+      else result.options[alias.key] = text
+    }
     if (!entry.arities.get(name)) {
       if (alias && equals >= 0) result.errors.push(`flag ${name} does not accept a value`)
       if (alias) result.options[alias.key] = !alias.negated
     } else if (equals >= 0) {
-      if (alias) result.options[alias.key] = token.slice(equals + 1)
+      assign(token.slice(equals + 1))
     } else {
       const next = argv[index + 1]
       if (next === undefined || (next !== '-' && next.startsWith('-') && !/^-\d/.test(next))) {
         if (alias) result.errors.push(`missing value for ${name}`)
       } else {
-        if (alias) result.options[alias.key] = next
+        assign(next)
         index++
       }
     }
@@ -190,7 +196,11 @@ function decodeArguments(definitions: Arguments, supplied: Input<Arguments>, lab
       continue
     }
     try {
-      if (shell && descriptor.kind !== 'flag' && descriptor.value.decode) result[key] = descriptor.value.decode(input as string)
+      if (shell && descriptor.element && (descriptor.repeated || descriptor.variadic)) {
+        const element = descriptor.element
+        result[key] = (input as string[]).map(text => element.decode ? element.decode(text) : element.validate(element.parse(text)))
+      }
+      else if (shell && descriptor.kind !== 'flag' && descriptor.value.decode) result[key] = descriptor.value.decode(input as string)
       else {
         const decoded = shell && descriptor.kind !== 'flag' ? descriptor.value.parse(input as string) : input
         result[key] = descriptor.value.validate(decoded)
@@ -255,7 +265,7 @@ export function createCLI<const R extends Registry>(registry: R & { [P in keyof 
       const { segments, command } = entry
       const matched = words.length < segments.length
         ? tokens.help && matches(segments, words, true) && segments.slice(words.length).every(segment => segment.startsWith('$'))
-        : matches(segments, words.slice(0, segments.length)) && words.length <= segments.length + command.args.length
+        : matches(segments, words.slice(0, segments.length)) && (command.args.at(-1)?.variadic || words.length <= segments.length + command.args.length)
       if (!matched) continue
       return { ...entry, tokens }
     }
@@ -277,7 +287,7 @@ export function createCLI<const R extends Registry>(registry: R & { [P in keyof 
     if (!command && children.length === 0 && path !== '/') throw new ValidationError('Unknown command. Run --help to see supported commands.')
     const display = segments.map(segment => segment.startsWith('$') ? `<${segment.slice(1)}>` : segment).join(' ')
     const title = [settings.name, display].filter(Boolean).join(' ')
-    const trailing = command?.args.map(arg => arg.required ? `<${arg.name}>` : `[${arg.name}]`).join(' ')
+    const trailing = command?.args.map(arg => arg.required ? `<${arg.name}${arg.variadic ? '...' : ''}>` : `[${arg.name}${arg.variadic ? '...' : ''}]`).join(' ')
     const sections = [`Usage: ${title}${children.length && !command?.run ? ' <command>' : ''}${trailing ? ` ${trailing}` : ''} [options]`]
     const description = command?.description || (path === '/' ? settings.description : '')
     if (description) sections.push(wrap(description, width))
@@ -294,15 +304,15 @@ export function createCLI<const R extends Registry>(registry: R & { [P in keyof 
       ...Object.entries<Arguments[string]>(command.params).map(([key, arg]): [string, string] => [
         `<${key}>`, [arg.description, `Type: ${arg.value.label}. Required.`].filter(Boolean).join(' '),
       ]),
-      ...command.args.map((arg): [string, string] => [arg.required ? `<${arg.name}>` : `[${arg.name}]`, [arg.description, `Type: ${arg.value.label}.`, arg.required ? 'Required.' : '', arg.hasDefault ? `Default: ${JSON.stringify(arg.defaultValue)}.` : ''].filter(Boolean).join(' ')]),
+      ...command.args.map((arg): [string, string] => [arg.required ? `<${arg.name}${arg.variadic ? '...' : ''}>` : `[${arg.name}${arg.variadic ? '...' : ''}]`, [arg.description, `Type: ${arg.value.label}.`, arg.required ? 'Required.' : '', arg.hasDefault ? `Default: ${JSON.stringify(arg.defaultValue)}.` : ''].filter(Boolean).join(' ')]),
     ] : []
     if (argumentRows.length) {
       sections.push(`Arguments:\n${table(argumentRows, width)}`)
     }
     const rows: [string, string][] = command ? Object.entries<Arguments[string]>(command.options).map(([key, arg]) => [
-      `${arg.short ? `-${arg.short}, ` : ''}--${optionName(key)}${arg.kind === 'flag' ? '' : ` <${arg.value.label}>`}`,
+      `${arg.short ? `-${arg.short}, ` : ''}--${optionName(key)}${arg.kind === 'flag' ? '' : ` <${arg.element?.label ?? arg.value.label}>`}`,
       [arg.description, arg.required ? 'Required.' : '', arg.hasDefault ? `Default: ${JSON.stringify(arg.defaultValue)}.` : '',
-        arg.kind === 'flag' && arg.negate ? `Negate with --no-${optionName(key)}.` : ''].filter(Boolean).join(' '),
+        arg.repeated ? 'Repeatable.' : '', arg.kind === 'flag' && arg.negate ? `Negate with --no-${optionName(key)}.` : ''].filter(Boolean).join(' '),
     ]) : []
     rows.push(['-h, --help', 'Show help.'])
     if (path === '/' && settings.version) rows.push(['-V, --version', 'Show version.'])
@@ -425,8 +435,8 @@ export function createCLI<const R extends Registry>(registry: R & { [P in keyof 
       candidate.segments.forEach((segment, index) => {
         if (segment.startsWith('$')) supplied[segment.slice(1)] = candidate.tokens.words[index]
       })
-      const trailing: Record<string, string | undefined> = {}
-      selected.args.forEach((arg, index) => { trailing[arg.name] = candidate.tokens.words[candidate.segments.length + index] })
+      const trailing: Record<string, string | string[] | undefined> = {}
+      selected.args.forEach((arg, index) => { trailing[arg.name] = arg.variadic ? candidate.tokens.words.slice(candidate.segments.length + index) : candidate.tokens.words[candidate.segments.length + index] })
       const params = decodeArguments(selected.params, supplied, 'argument', true, selected.validateParams)
       const options = decodeArguments(selected.options, candidate.tokens.options, 'option', true, selected.validateOptions)
       const args = decodeArguments(candidate.args, trailing, 'argument', true)

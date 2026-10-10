@@ -336,6 +336,7 @@ function validateDefinition(path: string | undefined, params: Arguments, options
   const argumentNames = new Set(names)
   let optional = false
   for (const arg of args) {
+    if (args.some((candidate, index) => candidate.variadic && index !== args.length - 1)) throw new ValidationError('variadic argument must be last')
     if (argumentNames.has(arg.name)) throw new ValidationError('duplicate argument name')
     if (optional && arg.required) throw new ValidationError('a required argument cannot follow an optional argument')
     // oxlint-disable-next-line typescript/no-unnecessary-condition -- JavaScript callers can supply non-positional descriptors.
@@ -385,6 +386,17 @@ export function bindCommand(path: string, command: AnyDefinition, groups?: reado
 }
 
 export function defineRegistry<const R extends Record<string, AnyCommand>>(registry: R & { [P in keyof R]: { readonly path: P } }): R {
+  for (const [path, command] of Object.entries(registry)) {
+    if (path !== command.path) throw new ValidationError(`registry path ${path} does not match ${command.path}`)
+  }
+  return registry
+}
+
+export function composeRegistries<const A extends Record<string, AnyCommand>, const B extends Record<string, AnyCommand>>(first: A, second: B): A & B {
+  for (const path of Object.keys(second)) {
+    if (Object.prototype.hasOwnProperty.call(first, path)) throw new ValidationError(`duplicate command path: ${path}`)
+  }
+  const registry = { ...first, ...second }
   for (const [path, command] of Object.entries(registry)) {
     if (path !== command.path) throw new ValidationError(`registry path ${path} does not match ${command.path}`)
   }

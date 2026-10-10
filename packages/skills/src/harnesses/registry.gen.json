@@ -1,0 +1,1815 @@
+{
+  "version": 1,
+  "source": {
+    "repository": "vercel-labs/skills",
+    "commit": "13e4063a1cf913f5606d57d42ab83a86f5001e04",
+    "file": "src/agents.ts",
+    "sha256": "9c64197246db1b61c0b2777114e2e01dd60f503129842ce7eeb78a3c3f2caa25"
+  },
+  "harnesses": [
+    {
+      "id": "adal",
+      "label": "AdaL",
+      "project": {
+        "kind": "literal",
+        "value": ".adal/skills"
+      },
+      "global": {
+        "kind": "join",
+        "parts": [
+          {
+            "kind": "home"
+          },
+          {
+            "kind": "literal",
+            "value": ".adal/skills"
+          }
+        ]
+      }
+    },
+    {
+      "id": "aider-desk",
+      "label": "AiderDesk",
+      "project": {
+        "kind": "literal",
+        "value": ".aider-desk/skills"
+      },
+      "global": {
+        "kind": "join",
+        "parts": [
+          {
+            "kind": "home"
+          },
+          {
+            "kind": "literal",
+            "value": ".aider-desk/skills"
+          }
+        ]
+      }
+    },
+    {
+      "id": "amp",
+      "label": "Amp",
+      "project": {
+        "kind": "literal",
+        "value": ".agents/skills"
+      },
+      "global": {
+        "kind": "join",
+        "parts": [
+          {
+            "kind": "environment",
+            "name": "XDG_CONFIG_HOME",
+            "fallback": {
+              "kind": "join",
+              "parts": [
+                {
+                  "kind": "home"
+                },
+                {
+                  "kind": "literal",
+                  "value": ".config"
+                }
+              ]
+            }
+          },
+          {
+            "kind": "literal",
+            "value": "agents/skills"
+          }
+        ]
+      }
+    },
+    {
+      "id": "antigravity",
+      "label": "Antigravity",
+      "project": {
+        "kind": "literal",
+        "value": ".agents/skills"
+      },
+      "global": {
+        "kind": "join",
+        "parts": [
+          {
+            "kind": "home"
+          },
+          {
+            "kind": "literal",
+            "value": ".gemini/antigravity/skills"
+          }
+        ]
+      }
+    },
+    {
+      "id": "antigravity-cli",
+      "label": "Antigravity CLI",
+      "project": {
+        "kind": "literal",
+        "value": ".agents/skills"
+      },
+      "global": {
+        "kind": "join",
+        "parts": [
+          {
+            "kind": "home"
+          },
+          {
+            "kind": "literal",
+            "value": ".gemini/antigravity-cli/skills"
+          }
+        ]
+      }
+    },
+    {
+      "id": "astrbot",
+      "label": "AstrBot",
+      "project": {
+        "kind": "literal",
+        "value": "data/skills"
+      },
+      "global": {
+        "kind": "join",
+        "parts": [
+          {
+            "kind": "home"
+          },
+          {
+            "kind": "literal",
+            "value": ".astrbot/data/skills"
+          }
+        ]
+      }
+    },
+    {
+      "id": "augment",
+      "label": "Augment",
+      "project": {
+        "kind": "literal",
+        "value": ".augment/skills"
+      },
+      "global": {
+        "kind": "join",
+        "parts": [
+          {
+            "kind": "home"
+          },
+          {
+            "kind": "literal",
+            "value": ".augment/skills"
+          }
+        ]
+      }
+    },
+    {
+      "id": "autohand-code",
+      "label": "Autohand Code CLI",
+      "project": {
+        "kind": "literal",
+        "value": ".autohand/skills"
+      },
+      "global": {
+        "kind": "join",
+        "parts": [
+          {
+            "kind": "environment",
+            "name": "AUTOHAND_HOME",
+            "fallback": {
+              "kind": "join",
+              "parts": [
+                {
+                  "kind": "home"
+                },
+                {
+                  "kind": "literal",
+                  "value": ".autohand"
+                }
+              ]
+            }
+          },
+          {
+            "kind": "literal",
+            "value": "skills"
+          }
+        ]
+      }
+    },
+    {
+      "id": "bob",
+      "label": "IBM Bob",
+      "project": {
+        "kind": "literal",
+        "value": ".bob/skills"
+      },
+      "global": {
+        "kind": "join",
+        "parts": [
+          {
+            "kind": "home"
+          },
+          {
+            "kind": "literal",
+            "value": ".bob/skills"
+          }
+        ]
+      }
+    },
+    {
+      "id": "claude-code",
+      "label": "Claude Code",
+      "project": {
+        "kind": "literal",
+        "value": ".claude/skills"
+      },
+      "global": {
+        "kind": "join",
+        "parts": [
+          {
+            "kind": "environment",
+            "name": "CLAUDE_CONFIG_DIR",
+            "fallback": {
+              "kind": "join",
+              "parts": [
+                {
+                  "kind": "home"
+                },
+                {
+                  "kind": "literal",
+                  "value": ".claude"
+                }
+              ]
+            }
+          },
+          {
+            "kind": "literal",
+            "value": "skills"
+          }
+        ]
+      }
+    },
+    {
+      "id": "cline",
+      "label": "Cline",
+      "project": {
+        "kind": "literal",
+        "value": ".agents/skills"
+      },
+      "global": {
+        "kind": "join",
+        "parts": [
+          {
+            "kind": "home"
+          },
+          {
+            "kind": "literal",
+            "value": ".agents"
+          },
+          {
+            "kind": "literal",
+            "value": "skills"
+          }
+        ]
+      }
+    },
+    {
+      "id": "codearts-agent",
+      "label": "CodeArts Agent",
+      "project": {
+        "kind": "literal",
+        "value": ".codeartsdoer/skills"
+      },
+      "global": {
+        "kind": "join",
+        "parts": [
+          {
+            "kind": "home"
+          },
+          {
+            "kind": "literal",
+            "value": ".codeartsdoer/skills"
+          }
+        ]
+      }
+    },
+    {
+      "id": "codebuddy",
+      "label": "CodeBuddy",
+      "project": {
+        "kind": "literal",
+        "value": ".codebuddy/skills"
+      },
+      "global": {
+        "kind": "join",
+        "parts": [
+          {
+            "kind": "home"
+          },
+          {
+            "kind": "literal",
+            "value": ".codebuddy/skills"
+          }
+        ]
+      }
+    },
+    {
+      "id": "codemaker",
+      "label": "Codemaker",
+      "project": {
+        "kind": "literal",
+        "value": ".codemaker/skills"
+      },
+      "global": {
+        "kind": "join",
+        "parts": [
+          {
+            "kind": "home"
+          },
+          {
+            "kind": "literal",
+            "value": ".codemaker/skills"
+          }
+        ]
+      }
+    },
+    {
+      "id": "codestudio",
+      "label": "Code Studio",
+      "project": {
+        "kind": "literal",
+        "value": ".codestudio/skills"
+      },
+      "global": {
+        "kind": "join",
+        "parts": [
+          {
+            "kind": "home"
+          },
+          {
+            "kind": "literal",
+            "value": ".codestudio/skills"
+          }
+        ]
+      }
+    },
+    {
+      "id": "codex",
+      "label": "Codex",
+      "project": {
+        "kind": "literal",
+        "value": ".agents/skills"
+      },
+      "global": {
+        "kind": "join",
+        "parts": [
+          {
+            "kind": "home"
+          },
+          {
+            "kind": "literal",
+            "value": ".agents"
+          },
+          {
+            "kind": "literal",
+            "value": "skills"
+          }
+        ]
+      }
+    },
+    {
+      "id": "command-code",
+      "label": "Command Code",
+      "project": {
+        "kind": "literal",
+        "value": ".commandcode/skills"
+      },
+      "global": {
+        "kind": "join",
+        "parts": [
+          {
+            "kind": "home"
+          },
+          {
+            "kind": "literal",
+            "value": ".commandcode/skills"
+          }
+        ]
+      }
+    },
+    {
+      "id": "continue",
+      "label": "Continue",
+      "project": {
+        "kind": "literal",
+        "value": ".continue/skills"
+      },
+      "global": {
+        "kind": "join",
+        "parts": [
+          {
+            "kind": "home"
+          },
+          {
+            "kind": "literal",
+            "value": ".continue/skills"
+          }
+        ]
+      }
+    },
+    {
+      "id": "cortex",
+      "label": "Cortex Code",
+      "project": {
+        "kind": "literal",
+        "value": ".cortex/skills"
+      },
+      "global": {
+        "kind": "join",
+        "parts": [
+          {
+            "kind": "home"
+          },
+          {
+            "kind": "literal",
+            "value": ".snowflake/cortex/skills"
+          }
+        ]
+      }
+    },
+    {
+      "id": "crush",
+      "label": "Crush",
+      "project": {
+        "kind": "literal",
+        "value": ".crush/skills"
+      },
+      "global": {
+        "kind": "join",
+        "parts": [
+          {
+            "kind": "home"
+          },
+          {
+            "kind": "literal",
+            "value": ".config/crush/skills"
+          }
+        ]
+      }
+    },
+    {
+      "id": "cursor",
+      "label": "Cursor",
+      "project": {
+        "kind": "literal",
+        "value": ".agents/skills"
+      },
+      "global": {
+        "kind": "join",
+        "parts": [
+          {
+            "kind": "home"
+          },
+          {
+            "kind": "literal",
+            "value": ".cursor/skills"
+          }
+        ]
+      }
+    },
+    {
+      "id": "deepagents",
+      "label": "Deep Agents",
+      "project": {
+        "kind": "literal",
+        "value": ".agents/skills"
+      },
+      "global": {
+        "kind": "join",
+        "parts": [
+          {
+            "kind": "home"
+          },
+          {
+            "kind": "literal",
+            "value": ".deepagents/agent/skills"
+          }
+        ]
+      }
+    },
+    {
+      "id": "devin",
+      "label": "Devin for Terminal",
+      "project": {
+        "kind": "literal",
+        "value": ".devin/skills"
+      },
+      "global": {
+        "kind": "join",
+        "parts": [
+          {
+            "kind": "environment",
+            "name": "XDG_CONFIG_HOME",
+            "fallback": {
+              "kind": "join",
+              "parts": [
+                {
+                  "kind": "home"
+                },
+                {
+                  "kind": "literal",
+                  "value": ".config"
+                }
+              ]
+            }
+          },
+          {
+            "kind": "literal",
+            "value": "devin/skills"
+          }
+        ]
+      }
+    },
+    {
+      "id": "dexto",
+      "label": "Dexto",
+      "project": {
+        "kind": "literal",
+        "value": ".agents/skills"
+      },
+      "global": {
+        "kind": "join",
+        "parts": [
+          {
+            "kind": "home"
+          },
+          {
+            "kind": "literal",
+            "value": ".agents/skills"
+          }
+        ]
+      }
+    },
+    {
+      "id": "droid",
+      "label": "Droid",
+      "project": {
+        "kind": "literal",
+        "value": ".agents/skills"
+      },
+      "global": {
+        "kind": "join",
+        "parts": [
+          {
+            "kind": "home"
+          },
+          {
+            "kind": "literal",
+            "value": ".factory/skills"
+          }
+        ]
+      }
+    },
+    {
+      "id": "eve",
+      "label": "Eve",
+      "project": {
+        "kind": "literal",
+        "value": "agent/skills"
+      },
+      "global": null
+    },
+    {
+      "id": "firebender",
+      "label": "Firebender",
+      "project": {
+        "kind": "literal",
+        "value": ".agents/skills"
+      },
+      "global": {
+        "kind": "join",
+        "parts": [
+          {
+            "kind": "home"
+          },
+          {
+            "kind": "literal",
+            "value": ".firebender/skills"
+          }
+        ]
+      }
+    },
+    {
+      "id": "forgecode",
+      "label": "ForgeCode",
+      "project": {
+        "kind": "literal",
+        "value": ".forge/skills"
+      },
+      "global": {
+        "kind": "join",
+        "parts": [
+          {
+            "kind": "home"
+          },
+          {
+            "kind": "literal",
+            "value": ".forge/skills"
+          }
+        ]
+      }
+    },
+    {
+      "id": "fx",
+      "label": "fx",
+      "project": {
+        "kind": "literal",
+        "value": ".agents/skills"
+      },
+      "global": {
+        "kind": "join",
+        "parts": [
+          {
+            "kind": "home"
+          },
+          {
+            "kind": "literal",
+            "value": ".agents/skills"
+          }
+        ]
+      }
+    },
+    {
+      "id": "gemini-cli",
+      "label": "Gemini CLI",
+      "project": {
+        "kind": "literal",
+        "value": ".agents/skills"
+      },
+      "global": {
+        "kind": "join",
+        "parts": [
+          {
+            "kind": "home"
+          },
+          {
+            "kind": "literal",
+            "value": ".gemini/skills"
+          }
+        ]
+      }
+    },
+    {
+      "id": "github-copilot",
+      "label": "GitHub Copilot",
+      "project": {
+        "kind": "literal",
+        "value": ".agents/skills"
+      },
+      "global": {
+        "kind": "join",
+        "parts": [
+          {
+            "kind": "home"
+          },
+          {
+            "kind": "literal",
+            "value": ".copilot/skills"
+          }
+        ]
+      }
+    },
+    {
+      "id": "goose",
+      "label": "Goose",
+      "project": {
+        "kind": "literal",
+        "value": ".goose/skills"
+      },
+      "global": {
+        "kind": "join",
+        "parts": [
+          {
+            "kind": "environment",
+            "name": "XDG_CONFIG_HOME",
+            "fallback": {
+              "kind": "join",
+              "parts": [
+                {
+                  "kind": "home"
+                },
+                {
+                  "kind": "literal",
+                  "value": ".config"
+                }
+              ]
+            }
+          },
+          {
+            "kind": "literal",
+            "value": "goose/skills"
+          }
+        ]
+      }
+    },
+    {
+      "id": "grok",
+      "label": "Grok Build",
+      "project": {
+        "kind": "literal",
+        "value": ".grok/skills"
+      },
+      "global": {
+        "kind": "join",
+        "parts": [
+          {
+            "kind": "environment",
+            "name": "GROK_HOME",
+            "fallback": {
+              "kind": "join",
+              "parts": [
+                {
+                  "kind": "home"
+                },
+                {
+                  "kind": "literal",
+                  "value": ".grok"
+                }
+              ]
+            }
+          },
+          {
+            "kind": "literal",
+            "value": "skills"
+          }
+        ]
+      }
+    },
+    {
+      "id": "hermes-agent",
+      "label": "Hermes Agent",
+      "project": {
+        "kind": "literal",
+        "value": ".hermes/skills"
+      },
+      "global": {
+        "kind": "join",
+        "parts": [
+          {
+            "kind": "environment",
+            "name": "HERMES_HOME",
+            "fallback": {
+              "kind": "join",
+              "parts": [
+                {
+                  "kind": "home"
+                },
+                {
+                  "kind": "literal",
+                  "value": ".hermes"
+                }
+              ]
+            }
+          },
+          {
+            "kind": "literal",
+            "value": "skills"
+          }
+        ]
+      }
+    },
+    {
+      "id": "iflow-cli",
+      "label": "iFlow CLI",
+      "project": {
+        "kind": "literal",
+        "value": ".iflow/skills"
+      },
+      "global": {
+        "kind": "join",
+        "parts": [
+          {
+            "kind": "home"
+          },
+          {
+            "kind": "literal",
+            "value": ".iflow/skills"
+          }
+        ]
+      }
+    },
+    {
+      "id": "inference-sh",
+      "label": "inference.sh",
+      "project": {
+        "kind": "literal",
+        "value": ".inferencesh/skills"
+      },
+      "global": {
+        "kind": "join",
+        "parts": [
+          {
+            "kind": "home"
+          },
+          {
+            "kind": "literal",
+            "value": ".inferencesh/skills"
+          }
+        ]
+      }
+    },
+    {
+      "id": "jazz",
+      "label": "Jazz",
+      "project": {
+        "kind": "literal",
+        "value": ".jazz/skills"
+      },
+      "global": {
+        "kind": "join",
+        "parts": [
+          {
+            "kind": "home"
+          },
+          {
+            "kind": "literal",
+            "value": ".jazz/skills"
+          }
+        ]
+      }
+    },
+    {
+      "id": "junie",
+      "label": "Junie",
+      "project": {
+        "kind": "literal",
+        "value": ".junie/skills"
+      },
+      "global": {
+        "kind": "join",
+        "parts": [
+          {
+            "kind": "home"
+          },
+          {
+            "kind": "literal",
+            "value": ".junie/skills"
+          }
+        ]
+      }
+    },
+    {
+      "id": "kilo",
+      "label": "Kilo Code",
+      "project": {
+        "kind": "literal",
+        "value": ".agents/skills"
+      },
+      "global": {
+        "kind": "join",
+        "parts": [
+          {
+            "kind": "home"
+          },
+          {
+            "kind": "literal",
+            "value": ".kilo/skills"
+          }
+        ]
+      }
+    },
+    {
+      "id": "kimchi",
+      "label": "Kimchi",
+      "project": {
+        "kind": "literal",
+        "value": ".kimchi/skills"
+      },
+      "global": {
+        "kind": "join",
+        "parts": [
+          {
+            "kind": "home"
+          },
+          {
+            "kind": "literal",
+            "value": ".config"
+          },
+          {
+            "kind": "literal",
+            "value": "kimchi"
+          },
+          {
+            "kind": "literal",
+            "value": "harness"
+          },
+          {
+            "kind": "literal",
+            "value": "skills"
+          }
+        ]
+      }
+    },
+    {
+      "id": "kimi-code-cli",
+      "label": "Kimi Code CLI",
+      "project": {
+        "kind": "literal",
+        "value": ".agents/skills"
+      },
+      "global": {
+        "kind": "join",
+        "parts": [
+          {
+            "kind": "home"
+          },
+          {
+            "kind": "literal",
+            "value": ".agents/skills"
+          }
+        ]
+      }
+    },
+    {
+      "id": "kiro-cli",
+      "label": "Kiro CLI",
+      "project": {
+        "kind": "literal",
+        "value": ".kiro/skills"
+      },
+      "global": {
+        "kind": "join",
+        "parts": [
+          {
+            "kind": "home"
+          },
+          {
+            "kind": "literal",
+            "value": ".kiro/skills"
+          }
+        ]
+      }
+    },
+    {
+      "id": "kode",
+      "label": "Kode",
+      "project": {
+        "kind": "literal",
+        "value": ".kode/skills"
+      },
+      "global": {
+        "kind": "join",
+        "parts": [
+          {
+            "kind": "home"
+          },
+          {
+            "kind": "literal",
+            "value": ".kode/skills"
+          }
+        ]
+      }
+    },
+    {
+      "id": "lingma",
+      "label": "Lingma",
+      "project": {
+        "kind": "literal",
+        "value": ".lingma/skills"
+      },
+      "global": {
+        "kind": "join",
+        "parts": [
+          {
+            "kind": "home"
+          },
+          {
+            "kind": "literal",
+            "value": ".lingma/skills"
+          }
+        ]
+      }
+    },
+    {
+      "id": "loaf",
+      "label": "Loaf",
+      "project": {
+        "kind": "literal",
+        "value": ".agents/skills"
+      },
+      "global": {
+        "kind": "join",
+        "parts": [
+          {
+            "kind": "home"
+          },
+          {
+            "kind": "literal",
+            "value": ".agents/skills"
+          }
+        ]
+      }
+    },
+    {
+      "id": "mcpjam",
+      "label": "MCPJam",
+      "project": {
+        "kind": "literal",
+        "value": ".mcpjam/skills"
+      },
+      "global": {
+        "kind": "join",
+        "parts": [
+          {
+            "kind": "home"
+          },
+          {
+            "kind": "literal",
+            "value": ".mcpjam/skills"
+          }
+        ]
+      }
+    },
+    {
+      "id": "minimax-code",
+      "label": "MiniMax Code",
+      "project": {
+        "kind": "literal",
+        "value": ".minimax/skills"
+      },
+      "global": {
+        "kind": "join",
+        "parts": [
+          {
+            "kind": "home"
+          },
+          {
+            "kind": "literal",
+            "value": ".minimax/skills"
+          }
+        ]
+      }
+    },
+    {
+      "id": "mistral-vibe",
+      "label": "Mistral Vibe",
+      "project": {
+        "kind": "literal",
+        "value": ".vibe/skills"
+      },
+      "global": {
+        "kind": "join",
+        "parts": [
+          {
+            "kind": "environment",
+            "name": "VIBE_HOME",
+            "fallback": {
+              "kind": "join",
+              "parts": [
+                {
+                  "kind": "home"
+                },
+                {
+                  "kind": "literal",
+                  "value": ".vibe"
+                }
+              ]
+            }
+          },
+          {
+            "kind": "literal",
+            "value": "skills"
+          }
+        ]
+      }
+    },
+    {
+      "id": "moxby",
+      "label": "Moxby",
+      "project": {
+        "kind": "literal",
+        "value": ".moxby/skills"
+      },
+      "global": {
+        "kind": "join",
+        "parts": [
+          {
+            "kind": "home"
+          },
+          {
+            "kind": "literal",
+            "value": ".moxby/skills"
+          }
+        ]
+      }
+    },
+    {
+      "id": "mux",
+      "label": "Mux",
+      "project": {
+        "kind": "literal",
+        "value": ".mux/skills"
+      },
+      "global": {
+        "kind": "join",
+        "parts": [
+          {
+            "kind": "home"
+          },
+          {
+            "kind": "literal",
+            "value": ".mux/skills"
+          }
+        ]
+      }
+    },
+    {
+      "id": "neovate",
+      "label": "Neovate",
+      "project": {
+        "kind": "literal",
+        "value": ".neovate/skills"
+      },
+      "global": {
+        "kind": "join",
+        "parts": [
+          {
+            "kind": "home"
+          },
+          {
+            "kind": "literal",
+            "value": ".neovate/skills"
+          }
+        ]
+      }
+    },
+    {
+      "id": "ona",
+      "label": "Ona",
+      "project": {
+        "kind": "literal",
+        "value": ".ona/skills"
+      },
+      "global": {
+        "kind": "join",
+        "parts": [
+          {
+            "kind": "home"
+          },
+          {
+            "kind": "literal",
+            "value": ".ona/skills"
+          }
+        ]
+      }
+    },
+    {
+      "id": "openclaw",
+      "label": "OpenClaw",
+      "project": {
+        "kind": "literal",
+        "value": "skills"
+      },
+      "global": {
+        "kind": "firstExisting",
+        "paths": [
+          {
+            "exists": {
+              "kind": "join",
+              "parts": [
+                {
+                  "kind": "home"
+                },
+                {
+                  "kind": "literal",
+                  "value": ".openclaw"
+                }
+              ]
+            },
+            "path": {
+              "kind": "join",
+              "parts": [
+                {
+                  "kind": "home"
+                },
+                {
+                  "kind": "literal",
+                  "value": ".openclaw/skills"
+                }
+              ]
+            }
+          },
+          {
+            "exists": {
+              "kind": "join",
+              "parts": [
+                {
+                  "kind": "home"
+                },
+                {
+                  "kind": "literal",
+                  "value": ".clawdbot"
+                }
+              ]
+            },
+            "path": {
+              "kind": "join",
+              "parts": [
+                {
+                  "kind": "home"
+                },
+                {
+                  "kind": "literal",
+                  "value": ".clawdbot/skills"
+                }
+              ]
+            }
+          },
+          {
+            "exists": {
+              "kind": "join",
+              "parts": [
+                {
+                  "kind": "home"
+                },
+                {
+                  "kind": "literal",
+                  "value": ".moltbot"
+                }
+              ]
+            },
+            "path": {
+              "kind": "join",
+              "parts": [
+                {
+                  "kind": "home"
+                },
+                {
+                  "kind": "literal",
+                  "value": ".moltbot/skills"
+                }
+              ]
+            }
+          }
+        ],
+        "fallback": {
+          "kind": "join",
+          "parts": [
+            {
+              "kind": "home"
+            },
+            {
+              "kind": "literal",
+              "value": ".openclaw/skills"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "opencode",
+      "label": "OpenCode",
+      "project": {
+        "kind": "literal",
+        "value": ".agents/skills"
+      },
+      "global": {
+        "kind": "join",
+        "parts": [
+          {
+            "kind": "environment",
+            "name": "XDG_CONFIG_HOME",
+            "fallback": {
+              "kind": "join",
+              "parts": [
+                {
+                  "kind": "home"
+                },
+                {
+                  "kind": "literal",
+                  "value": ".config"
+                }
+              ]
+            }
+          },
+          {
+            "kind": "literal",
+            "value": "opencode/skills"
+          }
+        ]
+      }
+    },
+    {
+      "id": "openhands",
+      "label": "OpenHands",
+      "project": {
+        "kind": "literal",
+        "value": ".openhands/skills"
+      },
+      "global": {
+        "kind": "join",
+        "parts": [
+          {
+            "kind": "home"
+          },
+          {
+            "kind": "literal",
+            "value": ".openhands/skills"
+          }
+        ]
+      }
+    },
+    {
+      "id": "pi",
+      "label": "Pi",
+      "project": {
+        "kind": "literal",
+        "value": ".agents/skills"
+      },
+      "global": {
+        "kind": "join",
+        "parts": [
+          {
+            "kind": "home"
+          },
+          {
+            "kind": "literal",
+            "value": ".agents/skills"
+          }
+        ]
+      }
+    },
+    {
+      "id": "pochi",
+      "label": "Pochi",
+      "project": {
+        "kind": "literal",
+        "value": ".pochi/skills"
+      },
+      "global": {
+        "kind": "join",
+        "parts": [
+          {
+            "kind": "home"
+          },
+          {
+            "kind": "literal",
+            "value": ".pochi/skills"
+          }
+        ]
+      }
+    },
+    {
+      "id": "posit-assistant",
+      "label": "Posit Assistant",
+      "project": {
+        "kind": "literal",
+        "value": ".posit/assistant/skills"
+      },
+      "global": {
+        "kind": "join",
+        "parts": [
+          {
+            "kind": "home"
+          },
+          {
+            "kind": "literal",
+            "value": ".posit/assistant/skills"
+          }
+        ]
+      }
+    },
+    {
+      "id": "promptscript",
+      "label": "PromptScript",
+      "project": {
+        "kind": "literal",
+        "value": ".agents/skills"
+      },
+      "global": null
+    },
+    {
+      "id": "qoder",
+      "label": "Qoder",
+      "project": {
+        "kind": "literal",
+        "value": ".qoder/skills"
+      },
+      "global": {
+        "kind": "join",
+        "parts": [
+          {
+            "kind": "home"
+          },
+          {
+            "kind": "literal",
+            "value": ".qoder/skills"
+          }
+        ]
+      }
+    },
+    {
+      "id": "qoder-cn",
+      "label": "Qoder CN",
+      "project": {
+        "kind": "literal",
+        "value": ".qoder/skills"
+      },
+      "global": {
+        "kind": "join",
+        "parts": [
+          {
+            "kind": "home"
+          },
+          {
+            "kind": "literal",
+            "value": ".qoder-cn/skills"
+          }
+        ]
+      }
+    },
+    {
+      "id": "qwen-code",
+      "label": "Qwen Code",
+      "project": {
+        "kind": "literal",
+        "value": ".qwen/skills"
+      },
+      "global": {
+        "kind": "join",
+        "parts": [
+          {
+            "kind": "home"
+          },
+          {
+            "kind": "literal",
+            "value": ".qwen/skills"
+          }
+        ]
+      }
+    },
+    {
+      "id": "reasonix",
+      "label": "Reasonix",
+      "project": {
+        "kind": "literal",
+        "value": ".reasonix/skills"
+      },
+      "global": {
+        "kind": "join",
+        "parts": [
+          {
+            "kind": "home"
+          },
+          {
+            "kind": "literal",
+            "value": ".reasonix/skills"
+          }
+        ]
+      }
+    },
+    {
+      "id": "replit",
+      "label": "Replit",
+      "project": {
+        "kind": "literal",
+        "value": ".agents/skills"
+      },
+      "global": {
+        "kind": "join",
+        "parts": [
+          {
+            "kind": "environment",
+            "name": "XDG_CONFIG_HOME",
+            "fallback": {
+              "kind": "join",
+              "parts": [
+                {
+                  "kind": "home"
+                },
+                {
+                  "kind": "literal",
+                  "value": ".config"
+                }
+              ]
+            }
+          },
+          {
+            "kind": "literal",
+            "value": "agents/skills"
+          }
+        ]
+      }
+    },
+    {
+      "id": "roo",
+      "label": "Roo Code",
+      "project": {
+        "kind": "literal",
+        "value": ".roo/skills"
+      },
+      "global": {
+        "kind": "join",
+        "parts": [
+          {
+            "kind": "home"
+          },
+          {
+            "kind": "literal",
+            "value": ".roo/skills"
+          }
+        ]
+      }
+    },
+    {
+      "id": "rovodev",
+      "label": "Rovo Dev",
+      "project": {
+        "kind": "literal",
+        "value": ".rovodev/skills"
+      },
+      "global": {
+        "kind": "join",
+        "parts": [
+          {
+            "kind": "home"
+          },
+          {
+            "kind": "literal",
+            "value": ".rovodev/skills"
+          }
+        ]
+      }
+    },
+    {
+      "id": "sarvam-code",
+      "label": "Sarvam Code",
+      "project": {
+        "kind": "literal",
+        "value": ".agents/skills"
+      },
+      "global": {
+        "kind": "join",
+        "parts": [
+          {
+            "kind": "home"
+          },
+          {
+            "kind": "literal",
+            "value": ".agents/skills"
+          }
+        ]
+      }
+    },
+    {
+      "id": "tabnine-cli",
+      "label": "Tabnine CLI",
+      "project": {
+        "kind": "literal",
+        "value": ".tabnine/agent/skills"
+      },
+      "global": {
+        "kind": "join",
+        "parts": [
+          {
+            "kind": "home"
+          },
+          {
+            "kind": "literal",
+            "value": ".tabnine/agent/skills"
+          }
+        ]
+      }
+    },
+    {
+      "id": "terramind",
+      "label": "Terramind",
+      "project": {
+        "kind": "literal",
+        "value": ".terramind/skills"
+      },
+      "global": {
+        "kind": "join",
+        "parts": [
+          {
+            "kind": "home"
+          },
+          {
+            "kind": "literal",
+            "value": ".terramind/skills"
+          }
+        ]
+      }
+    },
+    {
+      "id": "tinycloud",
+      "label": "Tinycloud",
+      "project": {
+        "kind": "literal",
+        "value": ".tinycloud/skills"
+      },
+      "global": {
+        "kind": "join",
+        "parts": [
+          {
+            "kind": "home"
+          },
+          {
+            "kind": "literal",
+            "value": ".tinycloud/skills"
+          }
+        ]
+      }
+    },
+    {
+      "id": "trae",
+      "label": "Trae",
+      "project": {
+        "kind": "literal",
+        "value": ".trae/skills"
+      },
+      "global": {
+        "kind": "join",
+        "parts": [
+          {
+            "kind": "home"
+          },
+          {
+            "kind": "literal",
+            "value": ".trae/skills"
+          }
+        ]
+      }
+    },
+    {
+      "id": "trae-cn",
+      "label": "Trae CN",
+      "project": {
+        "kind": "literal",
+        "value": ".trae/skills"
+      },
+      "global": {
+        "kind": "join",
+        "parts": [
+          {
+            "kind": "home"
+          },
+          {
+            "kind": "literal",
+            "value": ".trae-cn/skills"
+          }
+        ]
+      }
+    },
+    {
+      "id": "universal",
+      "label": "Universal",
+      "project": {
+        "kind": "literal",
+        "value": ".agents/skills"
+      },
+      "global": {
+        "kind": "join",
+        "parts": [
+          {
+            "kind": "environment",
+            "name": "XDG_CONFIG_HOME",
+            "fallback": {
+              "kind": "join",
+              "parts": [
+                {
+                  "kind": "home"
+                },
+                {
+                  "kind": "literal",
+                  "value": ".config"
+                }
+              ]
+            }
+          },
+          {
+            "kind": "literal",
+            "value": "agents/skills"
+          }
+        ]
+      }
+    },
+    {
+      "id": "warp",
+      "label": "Warp",
+      "project": {
+        "kind": "literal",
+        "value": ".agents/skills"
+      },
+      "global": {
+        "kind": "join",
+        "parts": [
+          {
+            "kind": "home"
+          },
+          {
+            "kind": "literal",
+            "value": ".agents/skills"
+          }
+        ]
+      }
+    },
+    {
+      "id": "windsurf",
+      "label": "Windsurf",
+      "project": {
+        "kind": "literal",
+        "value": ".windsurf/skills"
+      },
+      "global": {
+        "kind": "join",
+        "parts": [
+          {
+            "kind": "home"
+          },
+          {
+            "kind": "literal",
+            "value": ".codeium/windsurf/skills"
+          }
+        ]
+      }
+    },
+    {
+      "id": "zcode",
+      "label": "ZCode",
+      "project": {
+        "kind": "literal",
+        "value": ".zcode/skills"
+      },
+      "global": {
+        "kind": "join",
+        "parts": [
+          {
+            "kind": "home"
+          },
+          {
+            "kind": "literal",
+            "value": ".zcode/skills"
+          }
+        ]
+      }
+    },
+    {
+      "id": "zed",
+      "label": "Zed",
+      "project": {
+        "kind": "literal",
+        "value": ".agents/skills"
+      },
+      "global": {
+        "kind": "join",
+        "parts": [
+          {
+            "kind": "home"
+          },
+          {
+            "kind": "literal",
+            "value": ".agents/skills"
+          }
+        ]
+      }
+    },
+    {
+      "id": "zencoder",
+      "label": "Zencoder",
+      "project": {
+        "kind": "literal",
+        "value": ".zencoder/skills"
+      },
+      "global": {
+        "kind": "join",
+        "parts": [
+          {
+            "kind": "home"
+          },
+          {
+            "kind": "literal",
+            "value": ".zencoder/skills"
+          }
+        ]
+      }
+    },
+    {
+      "id": "zenflow",
+      "label": "Zenflow",
+      "project": {
+        "kind": "literal",
+        "value": ".zencoder/skills"
+      },
+      "global": {
+        "kind": "join",
+        "parts": [
+          {
+            "kind": "home"
+          },
+          {
+            "kind": "literal",
+            "value": ".zencoder/skills"
+          }
+        ]
+      }
+    }
+  ]
+}
