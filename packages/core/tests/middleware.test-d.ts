@@ -6,10 +6,12 @@ import {
   defineCommand,
   defineGroup,
   defineRoot,
-} from '../index.ts'
-import type { GroupContext } from '../index.ts'
+} from '../src/index.ts'
+import type { GroupContext } from '../src/index.ts'
+import { expectTypeOf } from './type-assertions.ts'
 
 const auth = createMiddleware.withContext<{ token: string }>().handler(({ ctx, next }) => {
+  expectTypeOf(ctx.services).toEqualTypeOf<{ token: string }>()
   const token: string = ctx.services.token
   return next({ context: { user: { id: token } } })
 })
@@ -25,6 +27,7 @@ const admin = defineGroup({
 const local = defineCommand({
   middleware: [createMiddleware().handler(({ next }) => next({ context: { count: 1 } }))],
   run: ({ ctx }) => {
+    expectTypeOf(ctx.services).toEqualTypeOf<{ count: number }>()
     const count: number = ctx.services.count
     // @ts-expect-error unrelated services are not exposed by middleware
     void ctx.services.user
@@ -57,7 +60,7 @@ createCLI(
   { name: 'app', context: () => ({ token: 1 }) },
 )
 
-declare module '../command/group.ts' {
+declare module '../src/command/group.ts' {
   interface FileCommandContexts {
     '/middleware-file': GroupContext<[typeof root, typeof admin]>
   }
@@ -65,6 +68,9 @@ declare module '../command/group.ts' {
 const file = createFileCommand('/middleware-file')({
   middleware: [createMiddleware().handler(({ next }) => next({ context: { count: 1 } }))],
   run: ({ ctx }) => {
+    expectTypeOf(ctx.services.user).toEqualTypeOf<{ id: string }>()
+    expectTypeOf(ctx.services.count).toEqualTypeOf<number>()
+    expectTypeOf(ctx.services.token).toEqualTypeOf<string>()
     const id: string = ctx.services.user.id
     const count: number = ctx.services.count
     const token: string = ctx.services.token

@@ -1,9 +1,12 @@
-import { bindCommand, createFileCommand, createCLI, defineRegistry, choice, flag, integer, option, positional, string } from '../index.ts'
+import { bindCommand, createFileCommand, createCLI, defineRegistry, choice, flag, integer, option, positional, string } from '../src/index.ts'
+import { expectTypeOf } from './type-assertions.ts'
 
 const remove = createFileCommand('/users/$userId/delete')({
   params: { userId: positional(integer({ min: 1 })) },
   options: { force: flag(), reason: option(string()), mode: option(choice(['soft', 'hard']), { default: 'soft' }) },
   run: ({ params, options }) => {
+    expectTypeOf(params).toEqualTypeOf<{ readonly userId: number }>()
+    expectTypeOf(options).toEqualTypeOf<{ readonly force: boolean; readonly reason: string | undefined; readonly mode: 'soft' | 'hard' }>()
     const id: number = params.userId
     const force: boolean = options.force
     const reason: string | undefined = options.reason
@@ -21,6 +24,7 @@ const cli = createCLI({ '/users/$userId/delete': remove, '/users/create': create
 
 async function contract() {
   const result = await cli.invoke('/users/$userId/delete', { params: { userId: 42 } })
+  expectTypeOf(result).toEqualTypeOf<{ deletedId: number; force: boolean; reason: string | undefined; mode: 'soft' | 'hard'; invalid: string }>()
   const id: number = result.deletedId
   // @ts-expect-error inferred result remains numeric
   const wrong: string = result.deletedId
@@ -61,6 +65,7 @@ createFileCommand('/$id')({
 })
 const ping = createFileCommand('/ping')({ run: () => 'pong' as const })
 const tiny = createCLI({ '/ping': ping }, { name: 'app' })
+expectTypeOf(tiny.invoke('/ping', {})).toEqualTypeOf<Promise<'pong'>>()
 // @ts-expect-error commands with no options reject arbitrary option keys
 void tiny.invoke('/ping', { options: { extra: true } })
 // @ts-expect-error static commands reject invented positional keys

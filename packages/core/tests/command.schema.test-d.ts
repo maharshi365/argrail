@@ -1,5 +1,6 @@
-import { bindCommand, createCLI, createFileCommand, defineCommand } from '../index.ts'
-import type { StandardSchema } from '../index.ts'
+import { bindCommand, createCLI, createFileCommand, defineCommand } from '../src/index.ts'
+import type { StandardSchema, CommandInput, CommandResult } from '../src/index.ts'
+import { expectTypeOf } from './type-assertions.ts'
 import { z } from 'zod'
 import * as v from 'valibot'
 
@@ -45,6 +46,8 @@ const command = createFileCommand('/users/$id')({
   validateOptions: options,
   optionConfig: { limit: {}, verbose: { type: 'flag' } },
   run: ({ params, options }) => {
+    expectTypeOf(params).toEqualTypeOf<{ id: number }>()
+    expectTypeOf(options).toEqualTypeOf<{ limit: number; verbose: boolean }>()
     const id: number = params.id
     const limit: number = options.limit
     const verbose: boolean = options.verbose
@@ -54,6 +57,9 @@ const command = createFileCommand('/users/$id')({
   },
 })
 const cli = createCLI({ [command.path]: command }, { name: 'app' })
+declare const commandInput: CommandInput<typeof command>
+expectTypeOf(commandInput.params).toEqualTypeOf<{ id: string }>()
+expectTypeOf(commandInput.options).toEqualTypeOf<{ limit?: string; verbose?: boolean } | undefined>()
 void cli.invoke(command.path, { params: { id: '42' } })
 void cli.invoke(command.path, { params: { id: '42' }, options: { limit: '5', verbose: true } })
 // @ts-expect-error invocation receives schema input
@@ -96,6 +102,8 @@ const libraryCommand = createFileCommand('/users/$id')({
   }),
   optionConfig: { limit: {}, verbose: { type: 'flag' } },
   run: ({ params, options }) => {
+    expectTypeOf(params).toEqualTypeOf<{ id: number }>()
+    expectTypeOf(options).toEqualTypeOf<{ limit: number; verbose: boolean }>()
     const id: number = params.id
     const limit: number = options.limit
     const verbose: boolean = options.verbose
@@ -103,6 +111,10 @@ const libraryCommand = createFileCommand('/users/$id')({
   },
 })
 const libraryCLI = createCLI({ [libraryCommand.path]: libraryCommand }, { name: 'app' })
+declare const libraryInput: CommandInput<typeof libraryCommand>
+declare const libraryResult: CommandResult<typeof libraryCommand>
+expectTypeOf(libraryInput.params).toEqualTypeOf<{ id: string }>()
+expectTypeOf(libraryResult).toEqualTypeOf<{ id: number; limit: number; verbose: boolean }>()
 void libraryCLI.invoke(libraryCommand.path, { params: { id: '42' } })
 // @ts-expect-error real-library transformations preserve their input contracts
 void libraryCLI.invoke(libraryCommand.path, { params: { id: 42 } })

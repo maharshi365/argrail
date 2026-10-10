@@ -11,7 +11,9 @@
   "scripts": {
     "argrail": "bun packages/tooling/src/argrail.mjs",
     "test": "bun test",
-    "check": "tsc --noEmit",
+    "check": "bun run check:lib && bun run test:types",
+    "check:lib": "tsc --noEmit",
+    "test:types": "tsc --noEmit -p tsconfig.types.json",
     "lint": "oxlint --config oxlint.config.mjs --deny-warnings --fix .",
     "format": "oxfmt --write .",
     "generate:demo": "bun packages/tooling/src/argrail.mjs generate --project examples/demo",

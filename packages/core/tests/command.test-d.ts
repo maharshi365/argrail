@@ -1,14 +1,18 @@
-import { argument, bindCommand, choice, createCLI, defineCommand, integer, option, positional, string, value } from '../index.ts'
-import type { CommandInput, CommandResult, CommandHandlerInput } from '../index.ts'
+import { argument, bindCommand, choice, createCLI, defineCommand, integer, option, positional, string, value } from '../src/index.ts'
+import type { CommandInput, CommandResult, CommandHandlerInput } from '../src/index.ts'
+import { expectTypeOf } from './type-assertions.ts'
 
 const lookup = defineCommand({
   params: { id: positional(integer()) },
   args: [argument('format', choice(['short', 'full']), { default: 'short' })],
   options: { label: option(string()) },
   run: async ({ params, args, ctx }) => {
+    expectTypeOf(params.id).toEqualTypeOf<number>()
+    expectTypeOf(args.format).toEqualTypeOf<'short' | 'full'>()
     const id: number = params.id
     const format: 'short' | 'full' = args.format
     const selected = await ctx.input.select({ message: 'Mode', choices: [{ label: 'One', value: 'one' }, { label: 'Two', value: 'two' }] })
+    expectTypeOf(selected).toEqualTypeOf<'one' | 'two'>()
     const mode: 'one' | 'two' = selected
     // @ts-expect-error selected values retain their literal union
     const invalid: 'other' = selected
@@ -33,6 +37,9 @@ void cli.invoke('/records/$id', { params: { id: 1 }, args: { unknown: true } })
 const input: CommandInput<typeof command> = { params: { id: 1 } }
 const result: CommandResult<typeof command> = { id: 1, format: 'short', mode: 'one', invalid: 'other' }
 const handler = (input: CommandHandlerInput<typeof command>) => input.params.id
+expectTypeOf(input.params.id).toEqualTypeOf<number>()
+expectTypeOf(result).toEqualTypeOf<{ id: number; format: 'short' | 'full'; mode: 'one' | 'two'; invalid: 'other' }>()
+expectTypeOf(handler).toEqualTypeOf<(input: CommandHandlerInput<typeof command>) => number>()
 void [input, result, handler]
 
 const group = bindCommand('/records', defineCommand({ description: 'Records' }))
