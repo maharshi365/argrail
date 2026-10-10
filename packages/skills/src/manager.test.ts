@@ -12,8 +12,8 @@ import {
 } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { tmpdir } from 'node:os'
-import { createSkills } from './index.mjs'
-import { hashFiles } from './files.mjs'
+import { createSkills } from './index.ts'
+import { hashFiles } from './files.ts'
 import { randomUUID } from 'node:crypto'
 
 function bundle(id = '@test/cli', text = 'original') {

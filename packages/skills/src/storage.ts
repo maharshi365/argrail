@@ -2,18 +2,19 @@ import { randomUUID } from 'node:crypto'
 import { mkdir, readFile, writeFile, rename, rm } from 'node:fs/promises'
 import { join, dirname } from 'node:path'
 import { CLIError } from '@argrail/core'
-import { stat, safePath, hashFiles, readTree } from './files.mjs'
-import { canonicalRoot } from './harnesses/resolve.mjs'
+import { stat, safePath, hashFiles, readTree } from './files.ts'
+import { canonicalRoot } from './harnesses/resolve.ts'
+import type { Receipt, Journal, Change } from './state.ts'
 
 // Receipts, lock files, and journals are untrusted JSON parsing boundaries.
-/* oxlint-disable deslop/no-runtime-typeof */
+/* oxlint-disable deslop/no-runtime-typeof, typescript/no-unnecessary-condition */
 
 export const receiptName = '.argrail-skills.json'
 const journalName = '.argrail-skills-journal.json'
 const lockName = '.argrail-skills.lock'
 const workName = '.argrail-skills-work'
 
-export async function readJSON(file, fallback) {
+export async function readJSON<T>(file: string, fallback?: T): Promise<T | undefined> {
   const info = await stat(file)
   if (!info) return fallback
   if (!info.isFile() || info.isSymbolicLink() || info.size > 8 * 1024 * 1024)
@@ -24,7 +25,8 @@ export async function readJSON(file, fallback) {
     throw new CLIError('SKILL_STATE', `Invalid JSON state file: ${file}`)
   }
 }
-export async function writeJSON(file, data) {
+// oxlint-disable-next-line deslop/no-unknown-parameters -- Serialization accepts any state object; readers validate each domain format.
+export async function writeJSON(file: string, data: unknown) {
   const temporary = `${file}.${randomUUID()}.tmp`
   await writeFile(temporary, JSON.stringify(data, null, 2) + '\n', { flag: 'wx', mode: 0o600 })
   try {
@@ -33,11 +35,11 @@ export async function writeJSON(file, data) {
     await rm(temporary, { force: true })
   }
 }
-export async function readReceipt(root) {
-  const receipt = await readJSON(join(root, receiptName), { version: 1, skills: {} })
+export async function readReceipt(root: string) {
+  const receipt = await readJSON<Receipt>(join(root, receiptName), { version: 1, skills: {} })
   return validateReceipt(receipt, root)
 }
-function validateReceipt(receipt, root) {
+function validateReceipt(receipt: Receipt | undefined, root: string): Receipt {
   if (receipt?.version !== 1)
     throw new CLIError(
       'SKILL_STATE_VERSION',
@@ -71,16 +73,16 @@ function validateReceipt(receipt, root) {
   }
   return receipt
 }
-export async function pendingJournal(root) {
+export async function pendingJournal(root: string) {
   return !!(await stat(join(root, journalName)))
 }
-async function directory(path) {
+async function directory(path: string) {
   const info = await stat(path)
   if (info && (!info.isDirectory() || info.isSymbolicLink()))
     throw new CLIError('SKILL_STATE', `Unsafe working directory: ${path}`)
   if (!info) await mkdir(path)
 }
-export async function lockRoot(root) {
+export async function lockRoot(root: string) {
   if (canonicalRoot(root) !== root)
     throw new CLIError('SKILL_PLAN_CHANGED', `Destination changed: ${root}`)
   await mkdir(root, { recursive: true })
@@ -95,19 +97,19 @@ export async function lockRoot(root) {
         mode: 0o600,
       })
       return async () => {
-        const lock = await readJSON(file)
+        const lock = await readJSON<{ pid: number; token: string }>(file)
         if (lock?.token === token) await rm(file)
       }
     } catch (error) {
-      if (error.code !== 'EEXIST') throw error
-      const lock = await readJSON(file)
-      if (!Number.isSafeInteger(lock?.pid) || lock.pid < 1 || typeof lock.token !== 'string')
+      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
+      const lock = await readJSON<{ pid: number; token: string }>(file)
+      if (!lock || !Number.isSafeInteger(lock.pid) || lock.pid < 1 || typeof lock.token !== 'string')
         throw new CLIError('SKILL_LOCKED', `Unrecognized lock file: ${file}`)
       let dead = false
       try {
         process.kill(lock.pid, 0)
       } catch (error) {
-        dead = error.code === 'ESRCH'
+        dead = (error as NodeJS.ErrnoException).code === 'ESRCH'
       }
       if (!dead) throw new CLIError('SKILL_LOCKED', `Another installer is using ${root}`)
       await rm(file)
@@ -116,7 +118,7 @@ export async function lockRoot(root) {
   throw new CLIError('SKILL_LOCKED', `Could not lock ${root}`)
 }
 
-function validateJournal(journal) {
+function validateJournal(journal: Journal | undefined): asserts journal is Journal {
   if (
     journal?.version !== 1 ||
     !/^[a-f0-9-]{36}$/.test(journal.id) ||
@@ -138,7 +140,7 @@ function validateJournal(journal) {
       throw new CLIError('SKILL_RECOVERY', 'Invalid recovery entry; no files were changed')
     names.add(entry.name)
     if (entry.install) {
-      if (!/^[a-f0-9]{64}$/.test(entry.hash) || !Array.isArray(entry.files))
+      if (!/^[a-f0-9]{64}$/.test(entry.hash!) || !Array.isArray(entry.files))
         throw new CLIError('SKILL_RECOVERY', 'Invalid recovery content hash')
       for (const file of entry.files) {
         safePath(file.path)
@@ -148,7 +150,7 @@ function validateJournal(journal) {
     }
   }
 }
-async function recoveryDirectory(root, journal) {
+async function recoveryDirectory(root: string, journal: Journal) {
   validateJournal(journal)
   const work = join(root, workName, journal.id)
   for (const path of [join(root, workName), work, join(work, 'old'), join(work, 'stage')]) {
@@ -159,7 +161,7 @@ async function recoveryDirectory(root, journal) {
         `Missing or unsafe recovery directory: ${path}; no files were changed`,
       )
   }
-  const original = await readJSON(join(work, 'journal.json'))
+  const original = await readJSON<Journal>(join(work, 'journal.json'))
   if (
     !original ||
     original.id !== journal.id ||
@@ -169,7 +171,7 @@ async function recoveryDirectory(root, journal) {
     throw new CLIError('SKILL_RECOVERY', 'Inconsistent recovery journal; no files were changed')
   return work
 }
-export async function rollback(root, journal) {
+export async function rollback(root: string, journal: Journal) {
   const work = await recoveryDirectory(root, journal)
   // Check every replacement before removing anything. Edits made after a crash
   // must be moved aside by the user, not discarded by recovery.
@@ -184,7 +186,7 @@ export async function rollback(root, journal) {
       (oldInfo || (!entry.hadOld && entry.install && !(await stat(stage)))) &&
       (await stat(destination))
     ) {
-      const info = await stat(destination)
+      const info = (await stat(destination))!
       if (!entry.install || !info.isDirectory() || info.isSymbolicLink())
         throw new CLIError(
           'SKILL_RECOVERY',
@@ -223,8 +225,8 @@ export async function rollback(root, journal) {
   await rm(join(root, journalName))
   await rm(work, { recursive: true, force: true })
 }
-export async function recoverRoot(root) {
-  const journal = await readJSON(join(root, journalName))
+export async function recoverRoot(root: string) {
+  const journal = await readJSON<Journal>(join(root, journalName))
   if (!journal) return false
   validateJournal(journal)
   if (journal.committed) {
@@ -232,9 +234,9 @@ export async function recoverRoot(root) {
   } else await rollback(root, journal)
   return true
 }
-async function finish(root, journal) {
+async function finish(root: string, journal: Journal): Promise<Record<string, string>> {
   const work = await recoveryDirectory(root, journal)
-  const backups = Object.create(null)
+  const backups: Record<string, string> = Object.create(null)
   for (const entry of journal.entries)
     if (entry.backup && (await stat(join(work, 'old', entry.name)))) {
       const base = join(root, '.argrail-skills-backups')
@@ -250,13 +252,13 @@ async function finish(root, journal) {
   return backups
 }
 
-export async function transact(root, before, after, changes, signal) {
+export async function transact(root: string, before: Receipt, after: Receipt, changes: Change[], signal?: AbortSignal) {
   const id = randomUUID()
   await directory(join(root, workName))
   const work = join(root, workName, id)
   await mkdir(join(work, 'stage'), { recursive: true })
   await mkdir(join(work, 'old'))
-  const journal = {
+  const journal: Journal = {
     version: 1,
     id,
     before,

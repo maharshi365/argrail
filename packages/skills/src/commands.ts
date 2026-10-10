@@ -8,9 +8,21 @@ import {
   repeatableOption,
   variadicArgument,
   CLIError,
+  type CommandContext,
+  type Group,
+  type Argument,
+  type InputChoice,
 } from '@argrail/core'
-import { createSkills } from './manager.mjs'
-import { listHarnesses } from './harnesses/resolve.mjs'
+import { createSkills } from './manager.ts'
+import { listHarnesses } from './harnesses/resolve.ts'
+import type { SkillBundle, SkillTarget, SkillPlan, ManagementCommands, GroupedManagementCommands } from './types.ts'
+import type { Mutable } from './state.ts'
+
+interface TargetValues { harness: string[]; global: boolean; project: string | undefined; path: string | undefined; json: boolean }
+interface ActionValues extends TargetValues { group: string[]; all: boolean }
+interface ExecutionValues { dryRun: boolean; json: boolean; yes: boolean; replace?: boolean; save?: boolean }
+type ManagementValues = ActionValues & ExecutionValues
+interface HarnessTarget { scope: 'global' | 'project'; harnesses: string[]; project?: string }
 
 const targetOptions = {
   harness: repeatableOption(string(), {
@@ -31,12 +43,14 @@ const actionOptions = {
   dryRun: flag({ description: 'Preview without writing files.' }),
 }
 
-export function createSkillsCommands(bundle, mount = 'skills', groups) {
+export function createSkillsCommands<const B extends SkillBundle, const Mount extends string, const G extends readonly Group[]>(bundle: B, mount: Mount, groups: G): GroupedManagementCommands<Mount, B, G>
+export function createSkillsCommands<const B extends SkillBundle, const Mount extends string = 'skills'>(bundle: B, mount?: Mount): ManagementCommands<Mount, B>
+export function createSkillsCommands(bundle: SkillBundle, mount = 'skills', groups?: readonly Group[]): ManagementCommands<string, SkillBundle> {
   if (!/^[a-z][a-z0-9-]*(?:\/[a-z][a-z0-9-]*)*$/.test(mount) || mount.split('/')[0] === 'help')
     throw new CLIError('SKILL_COMMAND', 'Invalid skills command mount')
   const manager = createSkills(bundle)
   const names = Object.keys(bundle.skills)
-  async function target(options, ctx) {
+  async function target(options: TargetValues, ctx: CommandContext): Promise<SkillTarget> {
     if (options.path !== undefined) {
       if (options.harness.length || options.global || options.project !== undefined)
         throw new CLIError('SKILL_TARGET', '--path conflicts with harness and scope selections')
@@ -45,12 +59,12 @@ export function createSkillsCommands(bundle, mount = 'skills', groups) {
     if (options.global && options.project !== undefined)
       throw new CLIError('SKILL_TARGET', '--global conflicts with --project')
     let harnesses = options.harness
-    let scope = options.global ? 'global' : 'project'
+    let scope: 'global' | 'project' = options.global ? 'global' : 'project'
     if (!harnesses.length) {
       if (options.json || !ctx.io.interactive)
         throw new CLIError('INTERACTION_REQUIRED', 'Specify --harness <id> or --path <skills-root>')
       if (!options.global && options.project === undefined)
-        scope = await ctx.input.select({
+        scope = await ctx.input.select<'global' | 'project'>({
           message: 'Installation scope',
           choices: [
             { label: 'Project (current directory)', value: 'project' },
@@ -63,21 +77,21 @@ export function createSkillsCommands(bundle, mount = 'skills', groups) {
         choices: listHarnesses({ scope })
           .sort((a, b) => Number(b.detected) - Number(a.detected) || a.label.localeCompare(b.label))
           .map(harness => {
-            const choice = {
+            const choice: InputChoice<string> = {
               label: `${harness.label}${harness.detected ? ' (detected)' : ''}`,
               value: harness.id,
-              description: scope === 'global' ? harness.globalPath : harness.projectPath,
+              description: (scope === 'global' ? harness.globalPath : harness.projectPath) ?? '',
             }
             if (harness.disabled) choice.disabled = harness.disabled
             return choice
           }),
       })
     }
-    const result = { scope, harnesses }
+    const result: HarnessTarget = { scope, harnesses }
     if (options.project !== undefined) result.project = options.project
-    return result
+    return result as SkillTarget
   }
-  async function selection(args, options, ctx, destination) {
+  async function selection(args: { names: string[] }, options: ActionValues, ctx: CommandContext, destination: SkillTarget) {
     let skills = manager.select({ skills: args.names, groups: options.group, all: options.all })
     if (!skills.length) {
       if (options.json || !ctx.io.interactive)
@@ -92,7 +106,7 @@ export function createSkillsCommands(bundle, mount = 'skills', groups) {
         ...names.map(name => ({
           label: `${name} (${[...new Set(installed.items.filter(item => item.name === name).map(item => item.status))].join(', ')})`,
           value: `skill:${name}`,
-          description: bundle.skills[name].description,
+           description: bundle.skills[name]!.description,
         })),
       ]
       const selected = await ctx.input.multiselect({
@@ -107,7 +121,7 @@ export function createSkillsCommands(bundle, mount = 'skills', groups) {
     }
     return skills
   }
-  function preview(plan, ctx) {
+  function preview(plan: SkillPlan, ctx: CommandContext) {
     ctx.io.stderr.write(`${plan.action} · ${plan.bundleId} · copy mode\n`)
     for (const root of plan.roots)
       if (root.shared.length > root.harnesses.length)
@@ -123,7 +137,7 @@ export function createSkillsCommands(bundle, mount = 'skills', groups) {
       `${installs.reduce((total, item) => total + item.fileCount, 0)} files · ${installs.reduce((total, item) => total + item.bytes, 0)} bytes\n`,
     )
   }
-  async function executePlan(plan, options, ctx) {
+  async function executePlan(plan: SkillPlan, options: ExecutionValues, ctx: CommandContext) {
     if (options.dryRun) {
       if (options.json) ctx.io.json(plan)
       else preview(plan, ctx)
@@ -143,7 +157,7 @@ export function createSkillsCommands(bundle, mount = 'skills', groups) {
       !(await ctx.input.confirm({ message: 'Proceed?', default: false }))
     )
       return { cancelled: true }
-    const result = await manager.apply(plan, { signal: ctx.signal })
+    const result = await manager.apply(plan, { signal: ctx.signal }) as Mutable<Awaited<ReturnType<typeof manager.apply>>>
     if (options.save) {
       if (result.exitCode)
         result.manifestError = {
@@ -154,14 +168,14 @@ export function createSkillsCommands(bundle, mount = 'skills', groups) {
         try {
           result.manifest = await manager.save(plan, result)
         } catch (error) {
-          if (!(error instanceof CLIError) && !['EACCES', 'EPERM', 'ENOSPC'].includes(error.code))
+          if (!(error instanceof CLIError) && !['EACCES', 'EPERM', 'ENOSPC'].includes((error as NodeJS.ErrnoException).code!))
             throw error
           result.manifestError = {
             code: error instanceof CLIError ? error.code : 'SKILL_MANIFEST_WRITE',
             message:
               error instanceof CLIError
                 ? error.message
-                : `Cannot save project manifest (${error.code})`,
+                 : `Cannot save project manifest (${(error as NodeJS.ErrnoException).code})`,
           }
           result.exitCode = 1
         }
@@ -178,8 +192,8 @@ export function createSkillsCommands(bundle, mount = 'skills', groups) {
       ctx.io.stderr.write(`Manifest not saved: ${result.manifestError.message}\n`)
     return result
   }
-  function managed(action) {
-    const definitions = { ...actionOptions }
+  function managed(action: SkillPlan['action']) {
+    const definitions: typeof actionOptions & { replace?: Argument<boolean, false, 'flag'>; save?: Argument<boolean, false, 'flag'> } = { ...actionOptions }
     if (action !== 'remove')
       definitions.replace = flag({ description: 'Back up and replace conflicting files.' })
     if (action === 'add')
@@ -190,7 +204,8 @@ export function createSkillsCommands(bundle, mount = 'skills', groups) {
       description: `${action === 'add' ? 'Install' : action === 'update' ? 'Update' : 'Remove'} skills bundled with this CLI.`,
       args: [variadicArgument('names', string())],
       options: definitions,
-      run: async ({ args, options, ctx }) => {
+      run: async ({ args, options: parsedOptions, ctx }) => {
+        const options = parsedOptions as ManagementValues
         try {
           if (options.save && (options.global || options.path !== undefined))
             throw new CLIError(
@@ -234,7 +249,8 @@ export function createSkillsCommands(bundle, mount = 'skills', groups) {
       },
     })
   }
-  function failure(error, options, ctx) {
+  // oxlint-disable-next-line deslop/no-unknown-parameters -- Caught values are unknown until the CLIError boundary check.
+  function failure(error: unknown, options: { json: boolean }, ctx: CommandContext) {
     if (!options.json || !(error instanceof CLIError)) throw error
     const result = {
       exitCode: ctx.signal.aborted ? 130 : 1,
@@ -255,7 +271,7 @@ export function createSkillsCommands(bundle, mount = 'skills', groups) {
         const result = {
           id: bundle.id,
           hash: bundle.hash,
-          skills: names.map(name => ({ name, description: bundle.skills[name].description })),
+          skills: names.map(name => ({ name, description: bundle.skills[name]!.description })),
           groups: bundle.groups,
         }
         if (options.json) ctx.io.json(result)
@@ -334,10 +350,10 @@ export function createSkillsCommands(bundle, mount = 'skills', groups) {
       },
     }),
   }
-  commands.delete = commands.remove
+  const aliases = { ...commands, delete: commands.remove }
   return defineRegistry(
     Object.fromEntries(
-      Object.entries(commands).map(([name, command]) => {
+      Object.entries(aliases).map(([name, command]) => {
         const path = `/${mount}/${name}`
         return [
           path,
@@ -345,5 +361,5 @@ export function createSkillsCommands(bundle, mount = 'skills', groups) {
         ]
       }),
     ),
-  )
+  ) as ManagementCommands<string, SkillBundle>
 }

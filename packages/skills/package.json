@@ -4,11 +4,12 @@
   "type": "module",
   "exports": {
     ".": {
-      "types": "./src/index.d.ts",
-      "default": "./src/index.mjs"
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
     },
-    "./build": "./src/bundle.mjs"
+    "./build": { "types": "./dist/bundle.d.ts", "default": "./dist/bundle.js" }
   },
+  "files": ["dist"],
   "dependencies": {
     "@argrail/core": "workspace:*",
     "yaml": "^2.8.1"

@@ -2,21 +2,22 @@ import { createHash } from 'node:crypto'
 import { lstat, readFile, readdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { CLIError, CancelledError } from '@argrail/core'
+import type { SkillFile } from './types.ts'
 // Parse byte payloads and reject control characters at the portable-path boundary.
 /* oxlint-disable deslop/no-runtime-typeof, eslint/no-control-regex */
 
 export const MAX_FILES = 4096
 export const MAX_BYTES = 32 * 1024 * 1024
-export const digest = value => createHash('sha256').update(value).digest('hex')
-export function hashFiles(files) {
+export const digest = (value: string | Uint8Array) => createHash('sha256').update(value).digest('hex')
+export function hashFiles(files: readonly SkillFile[]) {
   return digest(
     JSON.stringify([...files].sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0))),
   )
 }
-export function checkSignal(signal) {
+export function checkSignal(signal?: AbortSignal) {
   if (signal?.aborted) throw new CancelledError()
 }
-export function safePath(path) {
+export function safePath(path: string) {
   // oxlint-disable-next-line deslop/no-runtime-typeof, eslint/no-control-regex -- Parse portable paths and reject control characters at the filesystem boundary.
   if (
     typeof path !== 'string' ||
@@ -37,10 +38,10 @@ export function safePath(path) {
     throw new CLIError('UNSAFE_SKILL_PATH', `Unsafe skill path: ${path}`)
   }
 }
-export function validateFiles(files) {
+export function validateFiles(files: readonly SkillFile[]) {
   if (!Array.isArray(files) || files.length > MAX_FILES)
     throw new CLIError('SKILL_LIMIT', 'Skill has too many files')
-  const names = new Set()
+  const names = new Set<string>()
   let bytes = 0
   for (const file of files) {
     safePath(file.path)
@@ -68,18 +69,18 @@ export function validateFiles(files) {
     }
   }
 }
-export async function stat(path) {
+export async function stat(path: string) {
   try {
     return await lstat(path)
   } catch (error) {
-    if (error.code === 'ENOENT') return undefined
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined
     throw error
   }
 }
-export async function readTree(root, { rejectProjectFiles = false } = {}) {
-  const files = []
+export async function readTree(root: string, { rejectProjectFiles = false } = {}) {
+  const files: { path: string; data: string; executable: boolean }[] = []
   let bytes = 0
-  async function visit(directory, prefix = '') {
+  async function visit(directory: string, prefix = '') {
     for (const entry of (await readdir(directory, { withFileTypes: true })).sort((a, b) =>
       a.name < b.name ? -1 : a.name > b.name ? 1 : 0,
     )) {

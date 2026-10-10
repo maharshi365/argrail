@@ -45,7 +45,7 @@ export interface SkillSelection<B extends SkillBundle> {
   readonly groups?: readonly (keyof B['groups'] & string)[]
   readonly all?: boolean
 }
-export interface SkillPlanItem {
+export type SkillPlanItem = {
   readonly name: string
   readonly root: string
   readonly path: string
@@ -59,7 +59,7 @@ export interface SkillPlanItem {
   readonly fileCount: number
   readonly bytes: number
 }
-export interface SkillPlan {
+export type SkillPlan = {
   readonly action: 'add' | 'update' | 'remove'
   readonly bundleId: string
   readonly bundleHash: string
@@ -72,7 +72,7 @@ export interface SkillPlan {
   }[]
   readonly items: readonly SkillPlanItem[]
 }
-export interface SkillResult {
+export type SkillResult = {
   readonly bundleId: string
   readonly bundleHash: string
   readonly exitCode: number
@@ -101,10 +101,7 @@ export interface HarnessSettings {
   environment?: Record<string, string | undefined>
   scope?: 'project' | 'global'
 }
-export function createSkills<const B extends SkillBundle>(
-  bundle: B,
-  settings?: HarnessSettings,
-): {
+export interface SkillManager<B extends SkillBundle> {
   select(selection?: SkillSelection<B>): (keyof B['skills'] & string)[]
   plan(
     request: SkillSelection<B> & {
@@ -190,9 +187,9 @@ type SkillList<B extends SkillBundle> = {
 type ManagementResult<A extends Action, B extends SkillBundle> = A extends 'list'
   ? SkillList<B>
   : A extends 'status'
-    ? Awaited<ReturnType<ReturnType<typeof createSkills>['status']>> | CommandFailure
+    ? Awaited<ReturnType<SkillManager<B>['status']>> | CommandFailure
     : A extends 'recover'
-      ? Awaited<ReturnType<ReturnType<typeof createSkills>['recover']>> | Cancelled | CommandFailure
+      ? Awaited<ReturnType<SkillManager<B>['recover']>> | Cancelled | CommandFailure
       : SkillResult | SkillPlan | Cancelled | CommandFailure
 type ManagementCommand<Mount extends string, A extends Action, B extends SkillBundle> = Command<
   `/${Mount}/${A}`,
@@ -201,33 +198,18 @@ type ManagementCommand<Mount extends string, A extends Action, B extends SkillBu
   A extends 'list' ? ManagementResult<A, B> : Promise<ManagementResult<A, B>>,
   ManagementArgs<A, B>
 >
-type ManagementCommands<Mount extends string, B extends SkillBundle> = {
+export type ManagementCommands<Mount extends string, B extends SkillBundle> = {
   [A in Action as `/${Mount}/${A}`]: ManagementCommand<Mount, A, B>
 }
-export function createSkillsCommands<
-  const B extends SkillBundle,
-  const Mount extends string,
-  const G extends readonly Group[],
->(
-  bundle: B,
-  mount: Mount,
-  groups: G,
-): {
+export type GroupedManagementCommands<Mount extends string, B extends SkillBundle, G extends readonly Group[]> = {
   [A in Action as `/${Mount}/${A}`]: ManagementCommand<Mount, A, B> & { readonly groups: G }
 }
-export function createSkillsCommands<
-  const B extends SkillBundle,
-  const Mount extends string = 'skills',
->(bundle: B, mount?: Mount): ManagementCommands<Mount, B>
-export function listHarnesses(settings?: HarnessSettings): {
+export interface Harness {
   id: string
   label: string
   projectPath: string
   globalPath: string | undefined
   detected: boolean
   disabled?: string
-}[]
-export function resolveTargets(
-  target: SkillTarget,
-  settings?: HarnessSettings,
-): { root: string; harnesses: string[]; shared: string[] }[]
+}
+export interface HarnessRoot { root: string; harnesses: string[]; shared: string[] }

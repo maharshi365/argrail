@@ -3,8 +3,8 @@ import { mkdtemp, rm, writeFile, readFile, mkdir, readdir } from 'node:fs/promis
 import { tmpdir } from 'node:os'
 import { resolve } from 'node:path'
 import { createCLI } from '@argrail/core'
-import { createSkillsCommands } from './commands.mjs'
-import { hashFiles } from './files.mjs'
+import { createSkillsCommands } from './commands.ts'
+import { hashFiles } from './files.ts'
 
 async function fixture(run) {
   const root = await mkdtemp(

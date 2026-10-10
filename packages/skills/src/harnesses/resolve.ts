@@ -3,10 +3,13 @@ import { resolve, join, dirname, isAbsolute } from 'node:path'
 import { existsSync, realpathSync } from 'node:fs'
 import { CLIError } from '@argrail/core'
 import registry from './registry.gen.json' with { type: 'json' }
+import type { PathRule, HarnessRegistry } from './types.ts'
+import type { HarnessSettings, SkillTarget, Harness, HarnessRoot } from '../types.ts'
 // JavaScript callers can supply untrusted target objects.
-/* oxlint-disable deslop/no-runtime-typeof */
+/* oxlint-disable deslop/no-runtime-typeof, typescript/no-unnecessary-condition */
 
-function evaluate(rule, home, environment) {
+function evaluate(rule: PathRule | null, home: string, environment: Record<string, string | undefined>): string | undefined {
+  if (!rule) return undefined
   if (rule.kind === 'literal') return rule.value
   if (rule.kind === 'home') return home
   if (rule.kind === 'environment')
@@ -15,10 +18,10 @@ function evaluate(rule, home, environment) {
       (rule.fallback ? evaluate(rule.fallback, home, environment) : undefined)
     )
   if (rule.kind === 'join')
-    return join(...rule.parts.map(part => evaluate(part, home, environment)))
+    return join(...rule.parts.map(part => evaluate(part, home, environment)!))
   if (rule.kind === 'firstExisting')
     return evaluate(
-      rule.paths.find(candidate => existsSync(evaluate(candidate.exists, home, environment)))
+      rule.paths.find(candidate => existsSync(evaluate(candidate.exists, home, environment)!))
         ?.path ?? rule.fallback,
       home,
       environment,
@@ -26,7 +29,7 @@ function evaluate(rule, home, environment) {
   throw new CLIError('HARNESS_RULE', 'Unsupported harness path rule')
 }
 
-export function canonicalRoot(path) {
+export function canonicalRoot(path: string): string {
   const absolute = resolve(path)
   if (existsSync(absolute)) return realpathSync(absolute)
   const parent = dirname(absolute)
@@ -39,13 +42,13 @@ export function listHarnesses({
   home = homedir(),
   environment = process.env,
   scope = 'project',
-} = {}) {
-  return registry.harnesses.map(harness => {
+}: HarnessSettings = {}): Harness[] {
+  return (registry as HarnessRegistry).harnesses.map(harness => {
     const global = harness.global ? evaluate(harness.global, home, environment) : undefined
-    const result = {
+    const result: Harness = {
       id: harness.id,
       label: harness.label,
-      projectPath: evaluate(harness.project, home, environment),
+      projectPath: evaluate(harness.project, home, environment)!,
       globalPath: global,
       detected: harness.id !== 'universal' && !!global && existsSync(dirname(global)),
     }
@@ -54,7 +57,7 @@ export function listHarnesses({
   })
 }
 
-export function resolveTargets(target, settings = {}) {
+export function resolveTargets(target: SkillTarget, settings: HarnessSettings = {}): HarnessRoot[] {
   // oxlint-disable-next-line deslop/no-runtime-typeof -- Parse the public target boundary.
   if (!target || typeof target !== 'object')
     throw new CLIError('SKILL_TARGET', 'An installation target is required')
@@ -80,7 +83,7 @@ export function resolveTargets(target, settings = {}) {
     throw new CLIError('SKILL_TARGET', 'Select at least one harness with --harness')
   const harnesses = listHarnesses({ ...settings, scope })
   const project = resolve(target.project ?? process.cwd())
-  const destinations = new Map()
+  const destinations = new Map<string, HarnessRoot>()
   for (const id of new Set(target.harnesses)) {
     const harness = harnesses.find(candidate => candidate.id === id)
     if (!harness)
@@ -90,13 +93,13 @@ export function resolveTargets(target, settings = {}) {
       )
     if (harness.disabled)
       throw new CLIError('HARNESS_SCOPE', `${harness.label}: ${harness.disabled}`)
-    const path = scope === 'global' ? harness.globalPath : resolve(project, harness.projectPath)
+    const path = scope === 'global' ? harness.globalPath! : resolve(project, harness.projectPath)
     if (scope === 'global' && !isAbsolute(path))
       throw new CLIError('HARNESS_PATH', `${harness.label}: global path must be absolute`)
     const root = canonicalRoot(path)
     const key = process.platform === 'win32' ? root.toLowerCase() : root
     if (!destinations.has(key)) destinations.set(key, { root, harnesses: [], shared: [] })
-    const destination = destinations.get(key)
+    const destination = destinations.get(key)!
     destination.harnesses.push(id)
     destination.shared = harnesses
       .filter(candidate => {

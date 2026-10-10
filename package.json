@@ -9,19 +9,22 @@
     "examples/*"
   ],
   "scripts": {
-    "argrail": "bun packages/tooling/src/argrail.mjs",
+    "build": "bun scripts/build.ts",
+    "sync:harnesses": "bun scripts/sync-harnesses.ts",
+    "argrail": "bun packages/tooling/dist/argrail.js",
     "test": "bun test",
     "check": "bun run check:lib && bun run test:types",
     "check:lib": "tsc --noEmit",
     "test:types": "tsc --noEmit -p tsconfig.types.json",
     "lint": "oxlint --config oxlint.config.mjs --deny-warnings --fix .",
     "format": "oxfmt --write .",
-    "generate:demo": "bun packages/tooling/src/argrail.mjs generate --project examples/demo",
-    "check:demo": "bun packages/tooling/src/argrail.mjs check --project examples/demo",
-    "build:demo": "bun packages/tooling/src/argrail.mjs build --project examples/demo",
-    "dev:demo": "bun packages/tooling/src/argrail.mjs dev --project examples/demo"
+    "generate:demo": "bun packages/tooling/dist/argrail.js generate --project examples/demo",
+    "check:demo": "bun packages/tooling/dist/argrail.js check --project examples/demo",
+    "build:demo": "bun packages/tooling/dist/argrail.js build --project examples/demo",
+    "dev:demo": "bun packages/tooling/dist/argrail.js dev --project examples/demo"
   },
   "devDependencies": {
+    "@types/bun": "^1.4.2",
     "ai-deslop": "^0.4.5",
     "oxfmt": "^0.72.0",
     "oxlint": "^1.87.0",

@@ -1,10 +1,10 @@
 import { readlink } from 'node:fs/promises'
 import { join, resolve, relative, isAbsolute } from 'node:path'
 import { CLIError } from '@argrail/core'
-import { digest, hashFiles, readTree, stat, validateFiles, checkSignal } from './files.mjs'
-import { resolveTargets, canonicalRoot } from './harnesses/resolve.mjs'
+import { digest, hashFiles, readTree, stat, validateFiles, checkSignal } from './files.ts'
+import { resolveTargets, canonicalRoot } from './harnesses/resolve.ts'
 // Public bundles and saved project manifests are untrusted parsing boundaries.
-/* oxlint-disable deslop/no-runtime-typeof */
+/* oxlint-disable deslop/no-runtime-typeof, typescript/no-unnecessary-condition */
 import {
   readReceipt,
   pendingJournal,
@@ -13,9 +13,11 @@ import {
   readJSON,
   writeJSON,
   recoverRoot,
-} from './storage.mjs'
+} from './storage.ts'
+import type { SkillBundle, HarnessSettings, SkillSelection, SkillPlan, SkillPlanItem, SkillResult, SkillTarget, SkillManager, SkillFile } from './types.ts'
+import type { Receipt, ReceiptEntry, Change, MutablePlan, Mutable, Manifest, SavedTarget } from './state.ts'
 
-async function inspect(root, name, record) {
+async function inspect(root: string, name: string, record: ReceiptEntry | undefined) {
   const path = join(root, name),
     info = await stat(path)
   if (!info) return { exists: false, fingerprint: 'absent', clean: false }
@@ -51,11 +53,12 @@ async function inspect(root, name, record) {
     }
   }
 }
-function ownRecord(receipt, name) {
+function ownRecord(receipt: Receipt, name: string) {
   return Object.hasOwn(receipt.skills, name) ? receipt.skills[name] : undefined
 }
 
-export function createSkills(bundle, settings = {}) {
+export function createSkills<const B extends SkillBundle>(bundle: B, settings?: HarnessSettings): SkillManager<B>
+export function createSkills(bundle: SkillBundle, settings: HarnessSettings = {}): SkillManager<SkillBundle> {
   // oxlint-disable-next-line deslop/no-runtime-typeof -- Validate the public bundle boundary before creating a manager.
   if (
     !bundle ||
@@ -76,10 +79,10 @@ export function createSkills(bundle, settings = {}) {
       !/^[a-f0-9]{64}$/.test(skill.hash)
     )
       throw new CLIError('INVALID_SKILL_BUNDLE', `Invalid bundled skill: ${name}`)
-  const approved = new WeakMap()
-  const completed = new WeakMap()
+  const approved = new WeakMap<SkillPlan, string>()
+  const completed = new WeakMap<SkillResult, { plan: SkillPlan; snapshot: string }>()
 
-  function select({ skills = [], groups = [], all = false } = {}) {
+  function select({ skills = [], groups = [], all = false }: SkillSelection<SkillBundle> = {}) {
     if (
       !Array.isArray(skills) ||
       !Array.isArray(groups) ||
@@ -93,7 +96,7 @@ export function createSkills(bundle, settings = {}) {
           'UNKNOWN_SKILL_GROUP',
           `Unknown skill group: ${group}. Available: ${Object.keys(bundle.groups).join(', ')}`,
         )
-      names.push(...bundle.groups[group].skills)
+      names.push(...bundle.groups[group]!.skills)
     }
     for (const name of names)
       if (!Object.hasOwn(bundle.skills, name))
@@ -103,7 +106,7 @@ export function createSkills(bundle, settings = {}) {
         )
     return [...new Set(names)]
   }
-  async function plan(request) {
+  async function plan(request: SkillSelection<SkillBundle> & { action: SkillPlan['action']; target: SkillTarget; replace?: boolean }): Promise<MutablePlan> {
     if (!['add', 'update', 'remove'].includes(request.action))
       throw new CLIError('SKILL_ACTION', 'Unsupported skill operation')
     const names = select(request)
@@ -112,8 +115,8 @@ export function createSkills(bundle, settings = {}) {
     if (request.replace && request.action === 'remove')
       throw new CLIError('SKILL_SELECTION', '--replace cannot discard local edits during removal')
     const destinations = resolveTargets(request.target, settings)
-    const items = [],
-      roots = []
+    const items: MutablePlan['items'] = [],
+      roots: MutablePlan['roots'] = []
     for (const destination of destinations) {
       if (await pendingJournal(destination.root))
         throw new CLIError(
@@ -126,12 +129,12 @@ export function createSkills(bundle, settings = {}) {
         const record = ownRecord(receipt, name),
           owner = record?.owners.find(owner => owner.id === bundle.id)
         const state = await inspect(destination.root, name, record)
-        const skill = bundle.skills[name]
+        const skill = bundle.skills[name]!
         const remainingHarnesses =
           owner && request.target.path === undefined
             ? owner.harnesses.filter(id => !destination.harnesses.includes(id))
             : []
-        let operation = 'conflict',
+        let operation: SkillPlanItem['operation'] = 'conflict',
           reason = '',
           backup = false
         if (request.action === 'remove') {
@@ -140,7 +143,7 @@ export function createSkills(bundle, settings = {}) {
           else if (!state.exists) operation = 'release'
           else if (!state.clean) reason = 'Local files changed; removal refused'
           else
-            operation = record.owners.length > 1 || remainingHarnesses.length ? 'release' : 'remove'
+            operation = record!.owners.length > 1 || remainingHarnesses.length ? 'release' : 'remove'
           if (operation === 'release' && remainingHarnesses.length)
             reason = `Files remain for recorded harnesses: ${remainingHarnesses.join(', ')}. The selected harness may still read this shared root.`
         } else if (request.action === 'update' && !owner) {
@@ -193,23 +196,23 @@ export function createSkills(bundle, settings = {}) {
     return result
   }
 
-  async function apply(plan, { signal } = {}) {
+  async function apply(plan: SkillPlan, { signal }: { signal?: AbortSignal } = {}): Promise<SkillResult> {
     checkSignal(signal)
     if (approved.get(plan) !== JSON.stringify(plan))
       throw new CLIError('SKILL_PLAN', 'Plan is unknown or was changed; create a fresh plan')
     const submitted = plan
     plan = structuredClone(plan)
-    const loaded = new Map()
+    const loaded = new Map<string, readonly SkillFile[]>()
     for (const item of plan.items)
       if (item.operation === 'install' && !loaded.has(item.name)) {
-        const files = structuredClone(await bundle.skills[item.name].load())
+        const files = structuredClone(await bundle.skills[item.name]!.load())
         validateFiles(files)
-        if (hashFiles(files) !== bundle.skills[item.name].hash)
+        if (hashFiles(files) !== bundle.skills[item.name]!.hash)
           throw new CLIError('SKILL_INTEGRITY', `Bundled content hash does not match: ${item.name}`)
         loaded.set(item.name, files)
       }
-    const unlock = [],
-      results = []
+    const unlock: (() => Promise<void>)[] = [],
+      results: SkillResult['items'][number][] = []
     let cleanupFailure
     try {
       for (const root of [...plan.roots].sort((a, b) =>
@@ -247,7 +250,7 @@ export function createSkills(bundle, settings = {}) {
         checkSignal(signal)
         const before = await readReceipt(root.root),
           after = structuredClone(before),
-          changes = []
+          changes: Change[] = []
         const rootItems = plan.items.filter(item => item.root === root.root)
         for (const item of rootItems) {
           if (item.operation === 'conflict') {
@@ -263,21 +266,21 @@ export function createSkills(bundle, settings = {}) {
           const record = ownRecord(after, item.name)
           if (['remove', 'release'].includes(item.operation)) {
             if (item.remainingHarnesses.length)
-              record.owners.find(owner => owner.id === bundle.id).harnesses =
+              record!.owners.find(owner => owner.id === bundle.id)!.harnesses =
                 item.remainingHarnesses
-            else record.owners = record.owners.filter(owner => owner.id !== bundle.id)
-            if (!record.owners.length) delete after.skills[item.name]
+            else record!.owners = record!.owners.filter(owner => owner.id !== bundle.id)
+            if (!record!.owners.length) delete after.skills[item.name]
             if (item.operation === 'remove')
               changes.push({ name: item.name, exists: item.exists, backup: false })
           } else if (
             ['install', 'claim', 'noop'].includes(item.operation) &&
             plan.action !== 'remove'
           ) {
-            const files = loaded.get(item.name)
+            const files = loaded.get(item.name)!
             const entry =
               item.operation === 'install'
                 ? {
-                    hash: bundle.skills[item.name].hash,
+                    hash: bundle.skills[item.name]!.hash,
                     files: files.map(file => ({
                       path: file.path,
                       hash: digest(Buffer.from(file.data, 'base64')),
@@ -285,7 +288,7 @@ export function createSkills(bundle, settings = {}) {
                     })),
                     owners: record?.owners.filter(owner => owner.id !== bundle.id) ?? [],
                   }
-                : record
+                : record!
             const claim = {
               id: bundle.id,
               bundleHash: bundle.hash,
@@ -302,7 +305,7 @@ export function createSkills(bundle, settings = {}) {
               changes.push({ name: item.name, exists: item.exists, files, backup: item.backup })
           }
         }
-        let backups = {}
+        let backups: Record<string, string> = {}
         try {
           if (changes.length || JSON.stringify(before) !== JSON.stringify(after))
             backups = await transact(root.root, before, after, changes, signal)
@@ -311,12 +314,12 @@ export function createSkills(bundle, settings = {}) {
           if (
             !(error instanceof CLIError) &&
             !['EACCES', 'EPERM', 'ENOSPC', 'ENOENT', 'EEXIST', 'ENOTDIR', 'EIO'].includes(
-              error.code,
+              (error as NodeJS.ErrnoException).code!,
             )
           )
             throw error
           const recoveryRequired = await pendingJournal(root.root)
-          const reason = `${error instanceof CLIError ? error.message : `Cannot write destination (${error.code})`}${recoveryRequired ? '; run skills recover with this target' : ''}`
+          const reason = `${error instanceof CLIError ? error.message : `Cannot write destination (${(error as NodeJS.ErrnoException).code})`}${recoveryRequired ? '; run skills recover with this target' : ''}`
           for (const item of rootItems.filter(item => item.operation !== 'conflict'))
             results.push({
               name: item.name,
@@ -329,10 +332,10 @@ export function createSkills(bundle, settings = {}) {
           continue
         }
         for (const item of rootItems.filter(item => item.operation !== 'conflict')) {
-          const result = {
+          const result: Mutable<SkillResult['items'][number]> = {
             name: item.name,
             path: item.path,
-            harnesses: item.harnesses,
+            harnesses: [...item.harnesses],
             status:
               item.operation === 'install'
                 ? 'installed'
@@ -344,7 +347,7 @@ export function createSkills(bundle, settings = {}) {
                       ? 'claimed'
                       : 'unchanged',
           }
-          if (backups[item.name]) result.backup = backups[item.name]
+          if (backups[item.name]) result.backup = backups[item.name]!
           if (item.reason) result.reason = item.reason
           results.push(result)
         }
@@ -366,8 +369,8 @@ export function createSkills(bundle, settings = {}) {
     completed.set(result, { plan: submitted, snapshot: JSON.stringify(plan) })
     return result
   }
-  async function status(target) {
-    const items = []
+  async function status(target: SkillTarget): ReturnType<SkillManager<SkillBundle>['status']> {
+    const items: Awaited<ReturnType<SkillManager<SkillBundle>['status']>>['items'] = []
     for (const destination of resolveTargets(target, settings)) {
       const receipt = await readReceipt(destination.root)
       const recoveryRequired = await pendingJournal(destination.root)
@@ -381,7 +384,7 @@ export function createSkills(bundle, settings = {}) {
             ? 'unmanaged'
             : !state.clean
               ? 'modified'
-              : record.hash !== bundle.skills[name].hash
+              : record!.hash !== bundle.skills[name]!.hash
                 ? 'outdated'
                 : 'current'
         items.push({
@@ -406,7 +409,7 @@ export function createSkills(bundle, settings = {}) {
     }
     return { bundleId: bundle.id, bundleHash: bundle.hash, items }
   }
-  async function recover(target) {
+  async function recover(target: SkillTarget) {
     const items = []
     for (const destination of resolveTargets(target, settings)) {
       if (!(await pendingJournal(destination.root))) {
@@ -422,7 +425,7 @@ export function createSkills(bundle, settings = {}) {
     }
     return { items }
   }
-  async function save(plan, result) {
+  async function save(plan: SkillPlan, result: SkillResult) {
     if (
       completed.get(result)?.plan !== plan ||
       completed.get(result)?.snapshot !== JSON.stringify(plan)
@@ -443,7 +446,7 @@ export function createSkills(bundle, settings = {}) {
     const file = join(project, 'argrail.skills.json')
     const release = await lockRoot(project)
     try {
-      const manifest = await readJSON(file, { version: 1, bundles: {} })
+      const manifest = (await readJSON<Manifest>(file, { version: 1, bundles: {} }))!
       // oxlint-disable-next-line deslop/no-runtime-typeof -- Validate the saved project manifest before editing it.
       if (
         manifest.version !== 1 ||
@@ -463,7 +466,7 @@ export function createSkills(bundle, settings = {}) {
           'SKILL_MANIFEST',
           'Existing bundle targets are invalid; manifest preserved',
         )
-      const targets = new Map()
+      const targets = new Map<string, SavedTarget>()
       for (const target of previous?.targets ?? []) {
         validateSavedTarget(target)
         select({ skills: target.skills })
@@ -488,7 +491,7 @@ export function createSkills(bundle, settings = {}) {
       await release()
     }
   }
-  function validateSavedTarget(target) {
+  function validateSavedTarget(target: SavedTarget) {
     // oxlint-disable-next-line deslop/no-runtime-typeof -- Parse portable paths and selection arrays from the project manifest.
     if (
       !target ||
@@ -509,7 +512,7 @@ export function createSkills(bundle, settings = {}) {
   }
   async function restore(project = process.cwd()) {
     project = canonicalRoot(project)
-    const manifest = await readJSON(join(project, 'argrail.skills.json'))
+    const manifest = await readJSON<Manifest>(join(project, 'argrail.skills.json'))
     const entry =
       manifest?.version === 1 && Object.hasOwn(manifest.bundles ?? {}, bundle.id)
         ? manifest.bundles[bundle.id]
@@ -526,23 +529,23 @@ export function createSkills(bundle, settings = {}) {
       validateSavedTarget(target)
       const path = resolve(project, target.path)
       const next = await plan({ action: 'add', skills: target.skills, target: { path } })
-      if (!next.roots[0].root.startsWith(project + (process.platform === 'win32' ? '\\' : '/')))
+      if (!next.roots[0]!.root.startsWith(project + (process.platform === 'win32' ? '\\' : '/')))
         throw new CLIError('SKILL_MANIFEST', 'Saved target escapes the project')
-      next.roots[0].harnesses = target.harnesses
+      next.roots[0]!.harnesses = target.harnesses
       if (target.harnesses.length) {
         const current = resolveTargets({ project, harnesses: target.harnesses }, settings)
-        if (current.length !== 1 || current[0].root !== next.roots[0].root)
+        if (current.length !== 1 || current[0]!.root !== next.roots[0]!.root)
           throw new CLIError(
             'SKILL_MANIFEST',
             'Saved destination differs from the harness path rules; review the manifest before restoring',
           )
-        next.roots[0].shared = current[0].shared
+        next.roots[0]!.shared = current[0]!.shared
       }
-      for (const item of next.items) item.harnesses = next.roots[0].harnesses
+      for (const item of next.items) item.harnesses = next.roots[0]!.harnesses
       plans.push(next)
     }
-    const roots = new Map(),
-      items = new Map()
+    const roots = new Map<string, MutablePlan['roots'][number]>(),
+      items = new Map<string, MutablePlan['items'][number]>()
     for (const next of plans) {
       for (const root of next.roots) {
         const before = roots.get(root.root)
@@ -556,7 +559,7 @@ export function createSkills(bundle, settings = {}) {
         else items.set(key, item)
       }
     }
-    const combined = { ...plans[0], roots: [...roots.values()], items: [...items.values()] }
+    const combined = { ...plans[0]!, roots: [...roots.values()], items: [...items.values()] }
     approved.set(combined, JSON.stringify(combined))
     return combined
   }

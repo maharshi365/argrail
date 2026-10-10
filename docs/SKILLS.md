@@ -214,8 +214,8 @@ Numbered prompts use the existing terminal cleanup path.
 ## Maintainer harness synchronization
 
 ```sh
-bun scripts/sync-harnesses.mjs --ref <commit-or-tag>
-bun scripts/sync-harnesses.mjs --ref <commit-or-tag> --check
+bun run sync:harnesses --ref <commit-or-tag>
+bun run sync:harnesses --ref <commit-or-tag> --check
 ```
 
 The script resolves a ref to an immutable Vercel Skills commit, parses
@@ -225,5 +225,10 @@ handles OpenClaw's legacy-directory priority. Unsupported expressions stop
 the sync before any output changes. Generated data records its source commit
 and source hash.
 
-The bundled installer makes no network calls. Only this explicit maintainer sync
-uses the network; it is not part of user installation or CLI build.
+`bun run build` also runs this sync. Without `--ref`, the sync uses the commit
+recorded in `registry.gen.json`, not the latest upstream branch. Update that pin
+explicitly with the command above. A network or upstream parsing failure stops
+the package build and preserves the existing registry.
+
+The bundled installer and `argrail build` for an author's app make no harness-sync
+network calls. Synchronization is part of building the framework packages only.

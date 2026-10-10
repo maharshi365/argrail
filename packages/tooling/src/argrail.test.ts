@@ -5,7 +5,7 @@ import { resolve } from 'node:path'
 import { tmpdir } from 'node:os'
 
 const root = resolve(import.meta.dir, '../../..')
-const tooling = resolve(import.meta.dir, 'argrail.mjs')
+const tooling = resolve(import.meta.dir, '../dist/argrail.js')
 
 function run(command, args, cwd) {
   return new Promise((resolveResult, reject) => {

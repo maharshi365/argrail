@@ -3,15 +3,26 @@ import { join } from 'node:path'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { parseDocument } from 'yaml'
-import { digest, hashFiles, readTree, validateFiles } from './files.mjs'
+import { digest, hashFiles, readTree, validateFiles } from './files.ts'
+import type { SkillBundle, SkillFile } from './types.ts'
+
+export interface SkillMetadata {
+  name: string
+  description: string
+  license?: string
+  'allowed-tools'?: string
+  compatibility?: string
+  metadata?: Record<string, string>
+}
+export interface SkillBuildConfig { id: string; directory: string; groups?: SkillBundle['groups'] }
 
 // YAML and author configuration are untrusted parsing boundaries.
-/* oxlint-disable deslop/no-runtime-typeof */
+/* oxlint-disable deslop/no-runtime-typeof, typescript/no-unnecessary-condition */
 
 const namePattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
 const execute = promisify(execFile)
-async function executablePaths(directory) {
-  const paths = new Set()
+async function executablePaths(directory: string) {
+  const paths = new Set<string>()
   if (process.platform !== 'win32') return paths
   try {
     // Windows checkouts do not expose Git's executable bit through stat().
@@ -22,21 +33,22 @@ async function executablePaths(directory) {
     )
     for (const entry of stdout.split('\0')) {
       const match = /^100755 [a-f0-9]+ 0\t(.+)$/.exec(entry)
-      if (match) paths.add(match[1])
+      if (match) paths.add(match[1]!)
     }
   } catch (error) {
-    if (!['ENOENT', 128, 'ETIMEDOUT'].includes(error.code) && !error.killed) throw error
+    const failure = error as NodeJS.ErrnoException & { killed?: boolean }
+    if (!['ENOENT', 128, 'ETIMEDOUT'].includes(failure.code!) && !failure.killed) throw error
   }
   return paths
 }
-export function validateMetadata(text, directory, file) {
-  const fail = message => {
+export function validateMetadata(text: string, directory: string, file: string): SkillMetadata {
+  const fail = (message: string): never => {
     throw new Error(`${file}: ${message}`)
   }
   const match = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/.exec(text)
-  if (!match) fail('SKILL.md requires YAML frontmatter')
-  const document = parseDocument(match[1], { uniqueKeys: true })
-  if (document.errors.length) fail(`invalid YAML: ${document.errors[0].message}`)
+  if (!match) return fail('SKILL.md requires YAML frontmatter')
+  const document = parseDocument(match[1]!, { uniqueKeys: true })
+  if (document.errors.length) fail(`invalid YAML: ${document.errors[0]!.message}`)
   const data = document.toJS({ maxAliasCount: 20 })
   if (!data || typeof data !== 'object' || Array.isArray(data))
     fail('frontmatter must be a mapping')
@@ -69,9 +81,9 @@ export function validateMetadata(text, directory, file) {
   return data
 }
 
-export async function discoverSkills(config) {
-  const skills = Object.create(null),
-    files = Object.create(null)
+export async function discoverSkills(config: SkillBuildConfig) {
+  const skills: Record<string, SkillMetadata & { hash: string; fileCount: number; bytes: number }> = Object.create(null),
+    files: Record<string, SkillFile[]> = Object.create(null)
   const executables = await executablePaths(config.directory)
   for (const entry of (await readdir(config.directory, { withFileTypes: true })).sort((a, b) =>
     a.name < b.name ? -1 : a.name > b.name ? 1 : 0,

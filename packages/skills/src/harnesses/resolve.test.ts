@@ -2,7 +2,7 @@ import { test, expect } from 'bun:test'
 import { mkdtemp, mkdir, rm, symlink } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { tmpdir } from 'node:os'
-import { resolveTargets } from './resolve.mjs'
+import { resolveTargets } from './resolve.ts'
 
 test('resolves runtime environment overrides and deduplicates shared roots', () => {
   const home = resolve('fake-home'),

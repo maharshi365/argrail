@@ -4,7 +4,7 @@ import { mkdir, chmod, readFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createRequire } from 'node:module'
-import { loadConfig, generate, directorySnapshot, skillsSnapshot, addCommand } from './generator.mjs'
+import { loadConfig, generate, directorySnapshot, skillsSnapshot, addCommand, type ProjectConfig } from './generator.ts'
 
 const require = createRequire(import.meta.url)
 const args = process.argv.slice(2)
@@ -14,9 +14,9 @@ let project = '.'
 let compile = false
 let commandPath
 for (let index = 0; index < args.length; index++) {
-  if (args[index] === '--project' && args[index + 1]) project = args[++index]
+  if (args[index] === '--project' && args[index + 1]) project = args[++index]!
   else if (args[index] === '--compile') compile = true
-  else if (action === 'add' && commandPath === undefined && !args[index].startsWith('-')) commandPath = args[index]
+  else if (action === 'add' && commandPath === undefined && !args[index]!.startsWith('-')) commandPath = args[index]
   else if (args[index] === '--help' || args[index] === '-h') { showHelp(); process.exit(0) }
   else { console.error(`Error: unknown or incomplete option ${args[index]}`); process.exit(2) }
 }
@@ -38,24 +38,25 @@ Options:
   -h, --help             Show help.`)
 }
 
-function compiler(watch = false) {
+function compiler(watch = false): [string, string[]] {
   let bin
   try { bin = require.resolve('typescript/bin/tsc') }
   catch { throw new Error('TypeScript is required for checks. Install it with: bun add -d typescript') }
   return [process.execPath, [bin, '-p', '.argrail/tsconfig.json', '--pretty', 'false', ...(watch ? ['--watch', '--preserveWatchOutput'] : [])]]
 }
 
-function run(command, argv, cwd) {
-  return new Promise((resolveResult, reject) => {
+function run(command: string, argv: string[], cwd: string) {
+  return new Promise<number>((resolveResult, reject) => {
     const child = spawn(command, argv, { cwd, stdio: 'inherit' })
     child.on('error', reject)
     child.on('exit', (code, signal) => resolveResult(code ?? (signal ? 1 : 0)))
   })
 }
 
-async function dev(config) {
+async function dev(config: ProjectConfig) {
+  let lastError: string | undefined
   compiler() // Fail early with the same actionable error as one-shot checks.
-  const checker = spawn(process.execPath, [fileURLToPath(new URL('./checker.mjs', import.meta.url)), resolve(config.root, '.argrail/tsconfig.json')], {
+  const checker = spawn(process.execPath, [fileURLToPath(new URL(import.meta.url.endsWith('.ts') ? './checker.ts' : './checker.js', import.meta.url)), resolve(config.root, '.argrail/tsconfig.json')], {
     cwd: config.root, stdio: ['pipe', 'inherit', 'inherit'],
   })
   let snapshot = await directorySnapshot(config.commandsDirectory)
@@ -79,16 +80,16 @@ async function dev(config) {
         skillSnapshot = currentSkills
         configuration = nextConfiguration
         config = nextConfig
-        dev.lastError = undefined
+        lastError = undefined
         console.log(`Generated ${result.count} commands. Type checker will refresh.`)
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
-      if (message !== dev.lastError) console.error(`Error: ${message}`)
-      dev.lastError = message
+      if (message !== lastError) console.error(`Error: ${message}`)
+      lastError = message
     } finally { busy = false }
   }, 250)
-  function stop(code) {
+  function stop(code: number) {
     if (stopped) return
     stopped = true
     clearInterval(timer)
@@ -107,7 +108,7 @@ try {
     if (!['generate', 'check', 'dev', 'build', 'add'].includes(action)) throw new Error(`Unknown command: ${action}`)
     if (compile && action !== 'build') throw new Error('--compile is only valid for build')
     const config = await loadConfig(project)
-    if (action === 'add') console.log(`Created ${await addCommand(config, commandPath)}`)
+    if (action === 'add') console.log(`Created ${await addCommand(config, commandPath!)}`)
     const generated = await generate(config, { scaffold: action === 'dev' })
     console.log(`${generated.changed ? 'Generated' : 'Up to date:'} ${generated.count} commands.`)
     if (action === 'dev') await dev(config)

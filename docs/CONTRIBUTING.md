@@ -3,8 +3,16 @@
 ## Development
 
 ```sh
+bun install
+bun run build
 bun run dev:demo
 ```
+
+`bun run build` syncs the Vercel harness registry at its recorded commit, checks
+TypeScript, and emits JavaScript and declarations into each package's `dist/`.
+It needs network access. Sync or compiler failures stop the build.
+Package exports and the `argrail` executable use this output, not source files.
+Run the build again after changing framework or tooling sources, and before tests.
 
 For another project:
 

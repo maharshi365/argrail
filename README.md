@@ -184,6 +184,7 @@ Try the [demo](examples/demo) from this repository:
 
 ```sh
 bun install
+bun run build
 bun run build:demo
 bun examples/demo/dist/argrail-demo.js --help
 ```

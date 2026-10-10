@@ -2,7 +2,7 @@ import { test, expect } from 'bun:test'
 import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { tmpdir } from 'node:os'
-import { discoverSkills } from './bundle.mjs'
+import { discoverSkills } from './bundle.ts'
 
 async function fixture(run) {
   const root = await mkdtemp(
