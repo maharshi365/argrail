@@ -20,6 +20,10 @@ For another project:
 bun run argrail dev --project path/to/project
 ```
 
+Add `.argrail/` to that project's `.gitignore`. It contains generated internal
+files and can be recreated by Argrail. Argrail does not update `.gitignore`
+automatically. This repository already ignores `.argrail/`.
+
 The background watcher regenerates the command registry after file adds,
 renames, and deletes. A TypeScript watcher checks source edits. Configuration
 changes also trigger generation. Command handlers are never run automatically.
