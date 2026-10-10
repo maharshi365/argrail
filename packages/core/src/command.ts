@@ -1,6 +1,8 @@
 import type { Argument, NamedArgument, StandardSchema } from './values.ts'
 import { ValidationError, value, positional, option } from './values.ts'
 import type { CommandContext } from './context.ts'
+import type { MiddlewareList, MiddlewareContext } from './middleware.ts'
+import type { Group, FileCommandContext } from './group.ts'
 
 export type ParamNames<Path extends string> =
   Path extends `${string}/$${infer Name}/${infer Rest}` ? Name | ParamNames<`/${Rest}`> :
@@ -18,37 +20,39 @@ export type Input<A extends Arguments> =
 export type ArgumentMap<A extends readonly NamedArgument[]> = { [D in A[number] as D['name']]: D }
 export interface Section { readonly title: string; readonly body: string }
 
-export interface Command<Path extends string | undefined, Params extends Arguments, Options extends Arguments, Result, Args extends readonly NamedArgument[] = [], Services = {}> {
+export interface Command<Path extends string | undefined, Params extends Arguments, Options extends Arguments, Result, Args extends readonly NamedArgument[] = [], Services = {}, M extends MiddlewareList = []> {
   readonly path: Path
   readonly description: string
   readonly params: Params
   readonly options: Options
   readonly args: Args
   readonly sections: readonly Section[]
-  readonly run: (input: { params: Output<Params>; options: Output<Options>; args: Output<ArgumentMap<Args>>; ctx: CommandContext<Services> }) => Result
+  readonly middleware: M
+  readonly run: (input: { params: Output<Params>; options: Output<Options>; args: Output<ArgumentMap<Args>>; ctx: CommandContext<Services & MiddlewareContext<M>> }) => Result
 }
 
 // Erasure is confined to runtime dispatch. Public calls retain the concrete command type.
-export type AnyDefinition = Omit<Command<string | undefined, any, any, any, any, any>, 'run' | 'args'> & {
+export type AnyDefinition = Omit<Command<string | undefined, any, any, any, any, any, MiddlewareList>, 'run' | 'args'> & {
   readonly args: readonly NamedArgument[]
   readonly run: ((input: any) => any) | undefined
   readonly validateParams?: ObjectSchema | undefined
   readonly validateOptions?: ObjectSchema | undefined
+  readonly groups?: readonly Group[]
 }
 export type AnyCommand = AnyDefinition & { readonly path: string }
-type Group<P extends string | undefined, A extends Arguments, O extends Arguments, Args extends readonly NamedArgument[]> = Omit<Command<P, A, O, never, Args>, 'run'> & { readonly run: undefined }
 type RouteParams<Path extends string> = { [K in ParamNames<Path>]: Argument<unknown, true, 'positional'> }
 type Positionals = Record<string, Argument<unknown, true, 'positional'>>
 type OptionDefinitions = Record<string, Argument<unknown, boolean, 'option' | 'flag'>>
-type DefinitionConfig<A extends Arguments, O extends Arguments, Args extends readonly NamedArgument[]> = {
+type DefinitionConfig<A extends Arguments, O extends Arguments, Args extends readonly NamedArgument[], M extends MiddlewareList = []> = {
   description?: string
   options?: O
   params?: A
   args?: Args
   sections?: readonly Section[]
+  middleware?: M
 }
-type Handler<A extends Arguments, O extends Arguments, Args extends readonly NamedArgument[], Services, R> = Command<undefined, A, O, R, Args, Services>['run']
-type Configuration<P extends string, A extends Arguments, O extends Arguments, Args extends readonly NamedArgument[]> = Omit<DefinitionConfig<A, O, Args>, 'params'> & (ParamNames<P> extends never
+type Handler<A extends Arguments, O extends Arguments, Args extends readonly NamedArgument[], Services, R, M extends MiddlewareList = []> = Command<undefined, A, O, R, Args, Services, M>['run']
+type Configuration<P extends string, A extends Arguments, O extends Arguments, Args extends readonly NamedArgument[], M extends MiddlewareList = []> = Omit<DefinitionConfig<A, O, Args, M>, 'params'> & (ParamNames<P> extends never
   ? { params?: A & Record<Exclude<keyof A, ParamNames<P>>, never> }
   : { params: A & Record<Exclude<keyof A, ParamNames<P>>, never> })
 
@@ -73,10 +77,12 @@ type SchemaConfig<
   A extends Arguments,
   O extends Arguments,
   Args extends readonly NamedArgument[],
+  M extends MiddlewareList = [],
 > = {
   description?: string
   args?: Args
   sections?: readonly Section[]
+  middleware?: M
 } & (PS extends ObjectSchema
   ? {
       validateParams: PS
@@ -110,11 +116,12 @@ type SchemaHandler<
   Args extends readonly NamedArgument[],
   Services,
   R,
+  M extends MiddlewareList = [],
 > = (input: {
   params: PS extends ObjectSchema ? SchemaOutput<PS> : Output<A>
   options: OS extends ObjectSchema ? SchemaOutput<OS> : Output<O>
   args: Output<ArgumentMap<Args>>
-  ctx: CommandContext<Services>
+  ctx: CommandContext<Services & MiddlewareContext<M>>
 }) => R
 type SchemaCommand<
   P extends string | undefined,
@@ -125,6 +132,7 @@ type SchemaCommand<
   Args extends readonly NamedArgument[],
   Services,
   R,
+  M extends MiddlewareList = [],
 > = Omit<
   Command<
     P,
@@ -132,13 +140,14 @@ type SchemaCommand<
     OS extends ObjectSchema ? SchemaOptions<OS> : O,
     R,
     Args,
-    Services
+    Services,
+    M
   >,
   'run'
 > & {
   readonly validateParams: PS
   readonly validateOptions: OS
-  readonly run: SchemaHandler<PS, OS, A, O, Args, Services, R>
+  readonly run: SchemaHandler<PS, OS, A, O, Args, Services, R, M>
 }
 
 export function createFileCommand<const Path extends string>(path: Path) {
@@ -149,32 +158,35 @@ export function createFileCommand<const Path extends string>(path: Path) {
     const Options extends OptionDefinitions = {},
     const Args extends readonly NamedArgument[] = [],
     Result = unknown,
+    const M extends MiddlewareList = [],
   >(
-    config: SchemaConfig<Path, PS, OS, Params, Options, Args> & {
-      run: SchemaHandler<PS, OS, Params, Options, Args, {}, Result>
+    config: SchemaConfig<Path, PS, OS, Params, Options, Args, M> & {
+      run: SchemaHandler<PS, OS, Params, Options, Args, FileCommandContext<Path>, Result, M>
     },
-  ): SchemaCommand<Path, PS, OS, Params, Options, Args, {}, Result>
+  ): SchemaCommand<Path, PS, OS, Params, Options, Args, FileCommandContext<Path>, Result, M>
   function file<
     PS extends ObjectSchema | undefined = undefined,
     OS extends ObjectSchema | undefined = undefined,
     const Params extends RouteParams<Path> = RouteParams<Path>,
     const Options extends OptionDefinitions = {},
     const Args extends readonly NamedArgument[] = [],
+    const M extends MiddlewareList = [],
   >(
-    config: SchemaConfig<Path, PS, OS, Params, Options, Args> & { run?: never },
-  ): Omit<SchemaCommand<Path, PS, OS, Params, Options, Args, {}, never>, 'run'> & {
+    config: SchemaConfig<Path, PS, OS, Params, Options, Args, M> & { run?: never },
+  ): Omit<SchemaCommand<Path, PS, OS, Params, Options, Args, FileCommandContext<Path>, never, M>, 'run'> & {
     readonly run: undefined
   }
   function file<
     const Params extends RouteParams<Path> = RouteParams<Path>,
     const Options extends OptionDefinitions = {},
     const Args extends readonly NamedArgument[] = [],
+    const M extends MiddlewareList = [],
   >(
-    config: Configuration<Path, Params, Options, Args> & { run?: never },
-  ): Group<Path, Params, Options, Args>
-  function file<const Params extends RouteParams<Path> = RouteParams<Path>, const Options extends OptionDefinitions = {}, const Args extends readonly NamedArgument[] = [], Result = unknown>(
-    config: Configuration<Path, Params, Options, Args> & { run: Handler<Params, Options, Args, {}, Result> },
-  ): Command<Path, Params, Options, Result, Args>
+    config: Configuration<Path, Params, Options, Args, M> & { run?: never },
+  ): Omit<Command<Path, Params, Options, never, Args, FileCommandContext<Path>, M>, 'run'> & { readonly run: undefined }
+  function file<const Params extends RouteParams<Path> = RouteParams<Path>, const Options extends OptionDefinitions = {}, const Args extends readonly NamedArgument[] = [], Result = unknown, const M extends MiddlewareList = []>(
+    config: Configuration<Path, Params, Options, Args, M> & { run: Handler<Params, Options, Args, FileCommandContext<Path>, Result, M> },
+  ): Command<Path, Params, Options, Result, Args, FileCommandContext<Path>, M>
   function file(config: RuntimeConfig): AnyCommand {
     return build(path, config) as AnyCommand
   }
@@ -189,35 +201,37 @@ function author<Services>() {
     const Options extends OptionDefinitions = {},
     const Args extends readonly NamedArgument[] = [],
     Result = unknown,
+    const M extends MiddlewareList = [],
   >(
-    config: SchemaConfig<undefined, PS, OS, Params, Options, Args> & {
-      run: SchemaHandler<PS, OS, Params, Options, Args, Services, Result>
+    config: SchemaConfig<undefined, PS, OS, Params, Options, Args, M> & {
+      run: SchemaHandler<PS, OS, Params, Options, Args, Services, Result, M>
     },
-  ): SchemaCommand<undefined, PS, OS, Params, Options, Args, Services, Result>
+  ): SchemaCommand<undefined, PS, OS, Params, Options, Args, Services, Result, M>
   function definition<
     PS extends ObjectSchema | undefined = undefined,
     OS extends ObjectSchema | undefined = undefined,
     const Params extends Positionals = {},
     const Options extends OptionDefinitions = {},
     const Args extends readonly NamedArgument[] = [],
+    const M extends MiddlewareList = [],
   >(
-    config: SchemaConfig<undefined, PS, OS, Params, Options, Args> & { run?: never },
-  ): Omit<SchemaCommand<undefined, PS, OS, Params, Options, Args, Services, never>, 'run'> & {
+    config: SchemaConfig<undefined, PS, OS, Params, Options, Args, M> & { run?: never },
+  ): Omit<SchemaCommand<undefined, PS, OS, Params, Options, Args, Services, never, M>, 'run'> & {
     readonly run: undefined
   }
-  function definition<const Params extends Positionals = {}, const Options extends OptionDefinitions = {}, const Args extends readonly NamedArgument[] = [], Result = unknown>(
-    config: DefinitionConfig<Params, Options, Args> & { run: Handler<Params, Options, Args, Services, Result> },
-  ): Command<undefined, Params, Options, Result, Args, Services>
-  function definition<const Params extends Positionals = {}, const Options extends OptionDefinitions = {}, const Args extends readonly NamedArgument[] = []>(
-    config: DefinitionConfig<Params, Options, Args> & { run?: never },
-  ): Group<undefined, Params, Options, Args>
+  function definition<const Params extends Positionals = {}, const Options extends OptionDefinitions = {}, const Args extends readonly NamedArgument[] = [], Result = unknown, const M extends MiddlewareList = []>(
+    config: DefinitionConfig<Params, Options, Args, M> & { run: Handler<Params, Options, Args, Services, Result, M> },
+  ): Command<undefined, Params, Options, Result, Args, Services, M>
+  function definition<const Params extends Positionals = {}, const Options extends OptionDefinitions = {}, const Args extends readonly NamedArgument[] = [], const M extends MiddlewareList = []>(
+    config: DefinitionConfig<Params, Options, Args, M> & { run?: never },
+  ): Omit<Command<undefined, Params, Options, never, Args, Services, M>, 'run'> & { readonly run: undefined }
   function definition(config: RuntimeConfig): AnyDefinition { return build(undefined, config) }
   return definition
 }
 
 export const defineCommand = Object.assign(author<{}>(), { withContext: author })
 
-type RuntimeConfig = DefinitionConfig<Arguments, Arguments, readonly NamedArgument[]> & {
+type RuntimeConfig = DefinitionConfig<Arguments, Arguments, readonly NamedArgument[], MiddlewareList> & {
   run?: (input: any) => any
   validateParams?: ObjectSchema
   validateOptions?: ObjectSchema
@@ -269,6 +283,7 @@ function build(path: string | undefined, config: RuntimeConfig): AnyDefinition {
     options,
     args,
     sections: config.sections ?? [],
+    middleware: config.middleware ?? [],
     description: config.description ?? '',
     run: config.run,
     validateParams: config.validateParams,
@@ -345,10 +360,15 @@ function validateDefinition(path: string | undefined, params: Arguments, options
   }
 }
 
-export function bindCommand<const P extends string, C extends AnyDefinition>(path: P, command: C & {
+type Bindable<P extends string, C extends AnyDefinition> = C & {
   readonly path: NoInfer<P> | undefined
   readonly params: RouteParams<NoInfer<P>> & Record<Exclude<keyof C['params'], ParamNames<NoInfer<P>>>, never>
-}): Omit<C, 'path'> & { readonly path: P } {
+}
+type BoundCommand<P extends string, C extends AnyDefinition> = Omit<C, 'path' | 'groups'> & { readonly path: P }
+export function bindCommand<const P extends string, C extends AnyDefinition, const G extends readonly Group[]>(path: P, command: Bindable<P, C>, groups: G): BoundCommand<P, C> & { readonly groups: G }
+export function bindCommand<const P extends string, C extends AnyDefinition>(path: P, command: Bindable<P, C>): BoundCommand<P, C>
+// Binding is erased at runtime; the overloads retain concrete command and group types.
+export function bindCommand(path: string, command: AnyDefinition, groups?: readonly Group[]): any {
   if (command.path !== undefined && path !== command.path) throw new ValidationError(`file path ${path} does not match declared path ${command.path}`)
   const raw = value('text', { parse: text => text, validate: input => input })
   const params = command.validateParams
@@ -359,7 +379,9 @@ export function bindCommand<const P extends string, C extends AnyDefinition>(pat
       )
     : command.params
   validateDefinition(path, params, command.options, command.args)
-  return { ...command, params, path }
+  const bound: AnyCommand = { ...command, params, path }
+  if (groups !== undefined) return { ...bound, groups }
+  return bound
 }
 
 export function defineRegistry<const R extends Record<string, AnyCommand>>(registry: R & { [P in keyof R]: { readonly path: P } }): R {

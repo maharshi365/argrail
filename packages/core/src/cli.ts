@@ -6,12 +6,22 @@ import { createIO, memoryPorts, type IO, type IOPorts } from './io.ts'
 import { createInput } from './input.ts'
 import type { CommandContext } from './context.ts'
 import { processRuntime } from './process.ts'
+import { runMiddleware, type MiddlewareContext, type MiddlewareRequirements, type MiddlewareList } from './middleware.ts'
+import type { Group, GroupMiddleware } from './group.ts'
 
 type Registry = Record<string, AnyCommand>
 type ExecutablePaths<R extends Registry> = { [P in keyof R]: R[P]['run'] extends (...args: any[]) => any ? P : never }[keyof R] & string
-type Services<C extends AnyCommand> = CommandHandlerInput<C> extends { ctx: CommandContext<infer S> } ? S : unknown
+type MiddlewareAt<R extends Registry, P extends string> = P extends keyof R ? R[P]['middleware'] : []
+type SegmentMiddleware<R extends Registry, Rest extends string, Prefix extends string = ''> = Rest extends `${infer Segment}/${infer Tail}`
+  ? [...MiddlewareAt<R, `${Prefix}/${Segment}`>, ...SegmentMiddleware<R, Tail, `${Prefix}/${Segment}`>] : []
+type AncestorMiddleware<R extends Registry, P extends string> = P extends `/${infer Rest}`
+  ? P extends '/' ? [] : [...MiddlewareAt<R, '/'>, ...SegmentMiddleware<R, Rest>] : []
+type CommandMiddleware<R extends Registry, P extends keyof R & string> = R[P] extends { groups: infer G extends readonly Group[] }
+  ? [...GroupMiddleware<G>, ...R[P]['middleware']] : [...AncestorMiddleware<R, P>, ...R[P]['middleware']]
+type Services<C extends AnyCommand, M extends MiddlewareList> = (CommandHandlerInput<C> extends { ctx: CommandContext<infer S> }
+  ? Omit<S, keyof MiddlewareContext<M>> : {}) & MiddlewareRequirements<M>
 type Intersect<U> = (U extends unknown ? (value: U) => void : never) extends (value: infer I) => void ? I : never
-type RequiredServices<R extends Registry> = Intersect<{ [P in keyof R]: Services<R[P]> }[keyof R]>
+type RequiredServices<R extends Registry> = Intersect<{ [P in keyof R & string]: Services<R[P], CommandMiddleware<R, P>> }[keyof R & string]>
 type IsUnion<T, Whole = T> = T extends Whole ? [Whole] extends [T] ? false : true : never
 
 export interface CLISettings {
@@ -311,6 +321,17 @@ export function createCLI<const R extends Registry>(registry: R & { [P in keyof 
     return { io, signal, input: createInput(io, signal, answers), services, exitCode: 0 }
   }
 
+  function middleware(command: AnyCommand): MiddlewareList {
+    if (command.groups !== undefined) return [...command.groups.flatMap(group => group.middleware), ...command.middleware]
+    const segments = pathSegments(command.path)
+    const parents = segments.map((_, index) => registry[index === 0 ? '/' : `/${segments.slice(0, index).join('/')}`]).filter((parent): parent is AnyCommand => parent !== undefined)
+    return [...parents.flatMap(parent => parent.middleware), ...command.middleware]
+  }
+
+  async function dispatch(command: AnyCommand, params: Output<Arguments>, options: Output<Arguments>, args: Output<Arguments>, ctx: CommandContext<unknown>): Promise<any> {
+    return runMiddleware(middleware(command), ctx, current => command.run!({ params, options, args, ctx: current }))
+  }
+
   async function invoke<const P extends ExecutablePaths<R>>(path: P & (IsUnion<P> extends true ? never : unknown), input: CommandInput<NoInfer<R[P]>>, execution: ExecutionOptions = {}): Promise<CommandResult<R[P]>> {
     const command = registry[path]
     // oxlint-disable-next-line typescript/no-unnecessary-condition -- Untyped callers can supply a path absent from the registry.
@@ -324,9 +345,9 @@ export function createCLI<const R extends Registry>(registry: R & { [P in keyof 
     const options = decodeArguments(command.options, Object.prototype.hasOwnProperty.call(input, 'options') && input.options !== undefined ? input.options : {}, 'option', false, command.validateOptions)
     const args = decodeArguments(byPath.get(path)!.args, Object.prototype.hasOwnProperty.call(input, 'args') && input.args !== undefined ? input.args : {}, 'argument')
     const ctx = await context(createIO(execution.io ?? memoryPorts()), execution.signal ?? new AbortController().signal)
-    const result = await command.run({ params, options, args, ctx })
+    const result = await dispatch(command, params, options, args, ctx)
     checkSignal(ctx.signal)
-    return result
+    return result as CommandResult<R[P]>
   }
 
   async function execute(argv: readonly string[], execution: ExecutionOptions = {}, answers?: readonly unknown[]): Promise<RunResult> {
@@ -412,7 +433,7 @@ export function createCLI<const R extends Registry>(registry: R & { [P in keyof 
       // Keep handler errors separate from input errors, including ValidationError thrown by a handler.
       try {
         const ctx = await context(io, signal, answers)
-        const value = await selected.run({ params, options, args, ctx })
+        const value = await dispatch(selected, params, options, args, ctx)
         checkSignal(signal)
         if (!Number.isInteger(ctx.exitCode) || ctx.exitCode < 0 || ctx.exitCode > 255) throw new CLIError('INVALID_EXIT_CODE', 'Exit code must be an integer from 0 to 255')
         return result(ctx.exitCode, value)

@@ -20,6 +20,44 @@ describe('file-based generation', () => {
     expect(commandPath('users/$userId/delete.ts')).toBe('/users/$userId/delete')
     expect(() => commandPath('BadName.ts')).toThrow('Invalid command filename')
   })
+  test('generates inherited groups and removes pathless segments from command paths', async () => {
+    await project(async (root, config) => {
+      const directory = resolve(root, 'src/commands')
+      await mkdir(resolve(directory, '_protected/users'), { recursive: true })
+      for (const name of ['__root.ts', 'login.ts', '_protected/__group.ts', '_protected/deploy.ts', '_protected/users/__group.ts', '_protected/users/create.ts']) {
+        await writeFile(resolve(directory, name), 'throw new Error("discovery must not execute modules")')
+      }
+      expect(commandPath('_protected/users/create.ts')).toBe('/users/create')
+      expect((await generate(config)).count).toBe(3)
+      const content = await readFile(config.generatedRegistry, 'utf8')
+      expect(content).toContain('bindCommand("/deploy", command0, [group0, group1])')
+      expect(content).toContain('bindCommand("/users/create", command1, [group0, group1, group2])')
+      expect(content).toContain('bindCommand("/login", command2, [group0])')
+      expect(content).toContain('interface FileCommandContexts')
+      expect(content).not.toContain('"/_protected/deploy"')
+    })
+  })
+  test('rejects public path collisions across pathless groups', async () => {
+    await project(async (root) => {
+      const directory = resolve(root, 'src/commands')
+      await mkdir(resolve(directory, '_protected'))
+      await writeFile(resolve(directory, 'deploy.ts'), '')
+      await writeFile(resolve(directory, '_protected/deploy.ts'), '')
+      await expect(discover(directory)).rejects.toThrow('Duplicate command path: /deploy')
+    })
+  })
+  test('inherits index middleware through structural ancestors only', async () => {
+    await project(async (root, config) => {
+      const directory = resolve(root, 'src/commands')
+      await mkdir(resolve(directory, '_protected/users'), { recursive: true })
+      for (const name of ['login.ts', '_protected/users/index.ts', '_protected/users/create.ts']) await writeFile(resolve(directory, name), '')
+      await generate(config)
+      const content = await readFile(config.generatedRegistry, 'utf8')
+      expect(content).toContain('bindCommand("/users/create", command0, [group0])')
+      expect(content).toContain('bindCommand("/users", command1, [])')
+      expect(content).toContain('bindCommand("/login", command2, [])')
+    })
+  })
   test('generates a typed registry without executing command modules', async () => {
     await project(async (root, config) => {
       await writeFile(resolve(root, 'src/commands/build.ts'), 'throw new Error("must not execute during discovery")')

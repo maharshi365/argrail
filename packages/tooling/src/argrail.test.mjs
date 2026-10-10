@@ -92,6 +92,60 @@ await cli.run()\n`
   } finally { await rm(project, { recursive: true, force: true }) }
 }, 30000)
 
+test('builds typed subtree middleware with public login and pathless command paths', async () => {
+  const project = await setup()
+  try {
+    const directory = resolve(project, 'src/commands')
+    await mkdir(resolve(directory, '_protected/users'), { recursive: true })
+    await writeFile(resolve(directory, '__root.ts'), `import { createMiddleware, defineRoot } from '@argrail/core'
+export const Root = defineRoot({ middleware: [createMiddleware().handler(({ next }) => next({ context: { requestId: 1 } }))] })\n`)
+    await writeFile(resolve(directory, '_protected/__group.ts'), `import { CLIError, createMiddleware, defineGroup } from '@argrail/core'
+export const Group = defineGroup({ middleware: [createMiddleware.withContext<{ authenticated: boolean }>().handler(({ ctx, next }) => {
+  if (!ctx.services.authenticated) throw new CLIError('AUTH', 'Run login first')
+  return next({ context: { user: { id: 'u1' } } })
+})] })\n`)
+    await writeFile(resolve(directory, '_protected/users/__group.ts'), `import { createMiddleware, defineGroup } from '@argrail/core'
+export const Group = defineGroup({ middleware: [createMiddleware.withContext<{ user: { id: string } }>().handler(({ ctx, next }) => next({ context: { owner: ctx.services.user.id } }))] })\n`)
+    await writeFile(resolve(directory, '_protected/users/create.ts'), `import { createFileCommand } from '@argrail/core'
+export const Command = createFileCommand('/users/create')({ run: ({ ctx }) => {
+  const id: string = ctx.services.user.id
+  const owner: string = ctx.services.owner
+  const requestId: number = ctx.services.requestId
+  ctx.io.json({ id, owner, requestId })
+} })\n`)
+    await writeFile(resolve(directory, 'login.ts'), `import { createFileCommand } from '@argrail/core'
+export const Command = createFileCommand('/login')({ run: ({ ctx }) => {
+  // @ts-expect-error login does not inherit protected context
+  ctx.services.user
+  ctx.io.stdout.write('login\\n')
+} })\n`)
+    await writeFile(resolve(project, 'argrail.config.json'), '{"name":"fixture","entry":"src/cli.ts"}\n')
+    const entry = authenticated => `import { createCLI } from '@argrail/core'
+import { commandTree } from './commandTree.gen.ts'
+await createCLI(commandTree, { name: 'fixture', context: () => ({ authenticated: ${authenticated} }) }).run()\n`
+    await writeFile(resolve(project, 'src/cli.ts'), entry(false))
+    let built = await run(process.execPath, [tooling, 'build', '--project', project], root)
+    expect(built.code, built.stdout + built.stderr).toBe(0)
+    const bundle = resolve(project, 'dist/fixture.js')
+    const login = await run('node', [bundle, 'login'], project)
+    expect(login.code).toBe(0)
+    expect(login.stdout).toBe('login\n')
+    const blocked = await run('node', [bundle, 'users', 'create'], project)
+    expect(blocked.code).toBe(1)
+    expect(blocked.stderr).toContain('Run login first')
+    expect(blocked.stdout).toBe('')
+    const help = await run('node', [bundle, 'help', 'users', 'create'], project)
+    expect(help.code).toBe(0)
+    expect(help.stdout).toContain('fixture users create')
+    await writeFile(resolve(project, 'src/cli.ts'), entry(true))
+    built = await run(process.execPath, [tooling, 'build', '--project', project], root)
+    expect(built.code, built.stdout + built.stderr).toBe(0)
+    const allowed = await run('node', [bundle, 'users', 'create'], project)
+    expect(allowed.code).toBe(0)
+    expect(allowed.stdout).toBe('{"id":"u1","owner":"u1","requestId":1}\n')
+  } finally { await rm(project, { recursive: true, force: true }) }
+}, 30000)
+
 test('file renames break stale paths and builds fail instead of emitting an invalid CLI', async () => {
   const project = await setup()
   try {

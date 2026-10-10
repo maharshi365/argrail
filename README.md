@@ -82,8 +82,71 @@ export const Command = defineCommand({
 - Static commands take priority over dynamic routes.
 - Options can appear before or between command words. `--` ends option parsing.
 - Parent parameters and options are not inherited. Share definitions explicitly.
+- Middleware is inherited. A command's middleware protects that command and its descendants.
 - Overlapping routes must agree on whether a shared option alias takes a value.
 - `app help users 42 delete` shows help without running validation or application services.
+
+## Middleware and authentication
+
+Attach middleware to the root, a group, or one command. It runs parent-first and
+can extend `ctx.services` with typed values. A failure stops downstream execution.
+Help, version, and invalid input do not initialize services or run middleware.
+
+Keep `login` outside the protected subtree:
+
+```text
+src/commands/
+├── login.ts
+└── _protected/              # pathless: does not add command words
+    ├── __group.ts           # auth for every command below this directory
+    └── deploy.ts            # app deploy
+```
+
+```ts
+// src/commands/_protected/__group.ts
+import { CLIError, createMiddleware, defineGroup } from '@argrail/core'
+import { verifyStoredCredentials } from '../-auth.ts'
+
+const auth = createMiddleware().handler(async ({ next }) => {
+  const user = await verifyStoredCredentials()
+  if (!user) throw new CLIError('UNAUTHENTICATED', 'Run "app login" first.')
+  return next({ context: { user } })
+})
+
+export const Group = defineGroup({ middleware: [auth] })
+```
+
+Use `createFileCommand` to infer inherited services from the generated tree:
+
+```ts
+// src/commands/_protected/deploy.ts
+import { createFileCommand } from '@argrail/core'
+
+export const Command = createFileCommand('/deploy')({
+  run: ({ ctx }) => {
+    ctx.io.stdout.write(`Deploying as ${ctx.services.user.id}\n`)
+  },
+})
+```
+
+- `__root.ts` exports `Root = defineRoot({ middleware: [...] })` for all commands.
+- `__group.ts` exports `Group = defineGroup({ middleware: [...] })` for its subtree.
+- A command can declare its own `middleware` list. `index.ts` middleware also applies to descendants.
+- Children add middleware; they cannot remove parent middleware.
+- `createMiddleware.withContext<Services>()` declares services the middleware needs.
+  Supply services not added by ancestors through `createCLI({ context })`.
+- Middleware must return `next()` or `await next()`'s result, or throw an error.
+  Use `try/finally` around `await next()` for cleanup. Call `next()` only once.
+- Context additions are shallow and invocation-scoped. Existing keys and unsafe
+  property names cannot be replaced. Framework fields such as `ctx.io` stay separate.
+- `cli.invoke()`, `cli.execute()`, `cli.test()`, and `cli.run()` use the same pipeline.
+
+For a handwritten registry, middleware on `/users` applies to `/users` and its
+descendants. Use `bindCommand(path, command, [root, group])` to specify an explicit
+ancestor chain, including pathless groups. For unbound `defineCommand` handlers,
+use `defineCommand.withContext<GroupContext<[typeof group]>>()` for inherited types.
+Regenerate the tree after changing files or groups. Remote APIs must still
+authorize their own requests.
 
 ## Tooling
 
