@@ -1,7 +1,7 @@
-import type { Argument, NamedArgument, StandardSchema } from './values.ts'
-import { ValidationError, value, positional, option } from './values.ts'
-import type { CommandContext } from './context.ts'
-import type { MiddlewareList, MiddlewareContext } from './middleware.ts'
+import type { Argument, NamedArgument, StandardSchema } from '../values/values.ts'
+import { ValidationError, value, positional, option } from '../values/values.ts'
+import type { CommandContext } from '../execution/context.ts'
+import type { MiddlewareList, MiddlewareContext } from '../execution/middleware.ts'
 import type { Group, FileCommandContext } from './group.ts'
 
 export type ParamNames<Path extends string> =

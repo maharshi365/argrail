@@ -1,4 +1,4 @@
-import { CLIError, CancelledError, checkSignal } from './errors.ts'
+import { CLIError, CancelledError, checkSignal } from '../execution/errors.ts'
 import type { InputSource, ReadSettings, Writer } from './io.ts'
 
 export interface TerminalStream {

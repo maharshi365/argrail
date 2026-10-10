@@ -1,5 +1,5 @@
 import { test, expect } from 'bun:test'
-import { argument, bindCommand, CLIError, createCLI, defineCommand, flag, integer, option, positional, string, value } from './index.ts'
+import { argument, bindCommand, CLIError, createCLI, defineCommand, flag, integer, option, positional, string, value } from '../index.ts'
 
 test('captures explicit output and keeps handler results separate', async () => {
   const command = bindCommand('/accounts', defineCommand({

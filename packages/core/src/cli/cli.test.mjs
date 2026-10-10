@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'bun:test'
-import { createFileCommand, createCLI, integer, string, choice, positional, option, flag, value, ValidationError } from './index.ts'
+import { createFileCommand, createCLI, integer, string, choice, positional, option, flag, value, ValidationError } from '../index.ts'
 
 function fixture(settings = {}) {
   const deploy = createFileCommand('/deploy')({

@@ -1,4 +1,4 @@
-import type { MiddlewareList, MiddlewareContext, MiddlewareRequirements } from './middleware.ts'
+import type { MiddlewareList, MiddlewareContext, MiddlewareRequirements } from '../execution/middleware.ts'
 
 export interface Group<M extends MiddlewareList = MiddlewareList> {
   readonly middleware: M

@@ -1,5 +1,5 @@
-import { bindCommand, createCLI, createFileCommand, defineCommand } from './index.ts'
-import type { StandardSchema } from './index.ts'
+import { bindCommand, createCLI, createFileCommand, defineCommand } from '../index.ts'
+import type { StandardSchema } from '../index.ts'
 import { z } from 'zod'
 import * as v from 'valibot'
 

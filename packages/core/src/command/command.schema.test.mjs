@@ -1,5 +1,5 @@
 import { test, expect } from 'bun:test'
-import { createCLI, createFileCommand, defineCommand, bindCommand } from './index.ts'
+import { createCLI, createFileCommand, defineCommand, bindCommand } from '../index.ts'
 import { z } from 'zod'
 import * as v from 'valibot'
 

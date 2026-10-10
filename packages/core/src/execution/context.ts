@@ -1,5 +1,5 @@
-import type { IO } from './io.ts'
-import type { Input } from './input.ts'
+import type { IO } from '../io/io.ts'
+import type { Input } from '../io/input.ts'
 
 export interface CommandContext<Services = {}> {
   readonly signal: AbortSignal

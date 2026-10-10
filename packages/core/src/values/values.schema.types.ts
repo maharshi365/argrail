@@ -1,5 +1,5 @@
-import { argument, createCLI, createFileCommand, option, positional, schemaValue } from './index.ts'
-import type { StandardSchema } from './index.ts'
+import { argument, createCLI, createFileCommand, option, positional, schemaValue } from '../index.ts'
+import type { StandardSchema } from '../index.ts'
 
 const numeric: StandardSchema<string, number> = {
   '~standard': { version: 1, vendor: 'test', validate: input => ({ value: Number(input) }) },

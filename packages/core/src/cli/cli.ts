@@ -1,13 +1,13 @@
-import { optionName, pathSegments, type AnyCommand, type Arguments, type Input, type Output, type CommandInput, type CommandResult, type CommandHandlerInput, type Section } from './command.ts'
+import { optionName, pathSegments, type AnyCommand, type Arguments, type Input, type Output, type CommandInput, type CommandResult, type CommandHandlerInput, type Section } from '../command/command.ts'
 import { table, wrap } from './format.ts'
-import { ValidationError, schemaValue } from './values.ts'
-import { CLIError, CancelledError, checkSignal, type Failure } from './errors.ts'
-import { createIO, memoryPorts, type IO, type IOPorts } from './io.ts'
-import { createInput } from './input.ts'
-import type { CommandContext } from './context.ts'
-import { processRuntime } from './process.ts'
-import { runMiddleware, type MiddlewareContext, type MiddlewareRequirements, type MiddlewareList } from './middleware.ts'
-import type { Group, GroupMiddleware } from './group.ts'
+import { ValidationError, schemaValue } from '../values/values.ts'
+import { CLIError, CancelledError, checkSignal, type Failure } from '../execution/errors.ts'
+import { createIO, memoryPorts, type IO, type IOPorts } from '../io/io.ts'
+import { createInput } from '../io/input.ts'
+import type { CommandContext } from '../execution/context.ts'
+import { processRuntime } from '../io/process.ts'
+import { runMiddleware, type MiddlewareContext, type MiddlewareRequirements, type MiddlewareList } from '../execution/middleware.ts'
+import type { Group, GroupMiddleware } from '../command/group.ts'
 
 type Registry = Record<string, AnyCommand>
 type ExecutablePaths<R extends Registry> = { [P in keyof R]: R[P]['run'] extends (...args: any[]) => any ? P : never }[keyof R] & string

@@ -2,7 +2,7 @@ import { test, expect } from 'bun:test'
 import { PassThrough } from 'node:stream'
 import { createInput } from './input.ts'
 import { createIO } from './io.ts'
-import { streamInput, CancelledError } from './index.ts'
+import { streamInput, CancelledError } from '../index.ts'
 
 function fixture(terminal = true) {
   const stream = new PassThrough()

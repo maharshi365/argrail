@@ -1,4 +1,4 @@
-import { CLIError, checkSignal } from './errors.ts'
+import { CLIError, checkSignal } from '../execution/errors.ts'
 
 export type JsonValue = null | boolean | number | string | readonly JsonValue[] | { readonly [key: string]: JsonValue | undefined }
 export interface Writer { write(text: string): void }

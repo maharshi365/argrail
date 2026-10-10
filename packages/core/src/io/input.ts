@@ -1,4 +1,4 @@
-import { CLIError, checkSignal } from './errors.ts'
+import { CLIError, checkSignal } from '../execution/errors.ts'
 import { terminalText, type IO, type ReadSettings } from './io.ts'
 
 export interface SelectSettings<T> {

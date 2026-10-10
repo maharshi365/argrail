@@ -1,5 +1,5 @@
-import { argument, bindCommand, choice, createCLI, defineCommand, integer, option, positional, string, value } from './index.ts'
-import type { CommandInput, CommandResult, CommandHandlerInput } from './index.ts'
+import { argument, bindCommand, choice, createCLI, defineCommand, integer, option, positional, string, value } from '../index.ts'
+import type { CommandInput, CommandResult, CommandHandlerInput } from '../index.ts'
 
 const lookup = defineCommand({
   params: { id: positional(integer()) },

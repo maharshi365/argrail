@@ -9,7 +9,7 @@ import {
   CLIError,
   integer,
   option,
-} from './index.ts'
+} from '../index.ts'
 
 function fixture() {
   let user = null

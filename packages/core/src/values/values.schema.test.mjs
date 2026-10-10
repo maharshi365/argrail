@@ -1,5 +1,5 @@
 import { test, expect } from 'bun:test'
-import { argument, createCLI, createFileCommand, option, positional, schemaValue, ValidationError } from './index.ts'
+import { argument, createCLI, createFileCommand, option, positional, schemaValue, ValidationError } from '../index.ts'
 
 function numericSchema() {
   return {

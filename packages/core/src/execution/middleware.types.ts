@@ -6,8 +6,8 @@ import {
   defineCommand,
   defineGroup,
   defineRoot,
-} from './index.ts'
-import type { GroupContext } from './index.ts'
+} from '../index.ts'
+import type { GroupContext } from '../index.ts'
 
 const auth = createMiddleware.withContext<{ token: string }>().handler(({ ctx, next }) => {
   const token: string = ctx.services.token
@@ -57,7 +57,7 @@ createCLI(
   { name: 'app', context: () => ({ token: 1 }) },
 )
 
-declare module './group.ts' {
+declare module '../command/group.ts' {
   interface FileCommandContexts {
     '/middleware-file': GroupContext<[typeof root, typeof admin]>
   }
