@@ -165,8 +165,9 @@ app skills remove --all --harness claude-code --yes
 ```
 
 This distributes only skills bundled by the CLI author. It does not browse or
-download third-party skills. See [Bundled skills](docs/SKILLS.md) for groups,
-global/custom targets, conflict backups, recovery, and project save/restore.
+download third-party skills. Add and update replace whole skill directories,
+including local edits. See [Bundled skills](docs/SKILLS.md) for groups,
+global/custom targets, and direct file operations.
 
 ### Build and development
 

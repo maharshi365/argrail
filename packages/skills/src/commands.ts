@@ -10,17 +10,15 @@ import {
   CLIError,
   type CommandContext,
   type Group,
-  type Argument,
   type InputChoice,
 } from '@argrail/core'
 import { createSkills } from './manager.ts'
 import { listHarnesses } from './harnesses/resolve.ts'
 import type { SkillBundle, SkillTarget, SkillPlan, ManagementCommands, GroupedManagementCommands } from './types.ts'
-import type { Mutable } from './state.ts'
 
 interface TargetValues { harness: string[]; global: boolean; project: string | undefined; path: string | undefined; json: boolean }
 interface ActionValues extends TargetValues { group: string[]; all: boolean }
-interface ExecutionValues { dryRun: boolean; json: boolean; yes: boolean; replace?: boolean; save?: boolean }
+interface ExecutionValues { dryRun: boolean; json: boolean; yes: boolean }
 type ManagementValues = ActionValues & ExecutionValues
 interface HarnessTarget { scope: 'global' | 'project'; harnesses: string[]; project?: string }
 
@@ -39,7 +37,7 @@ const actionOptions = {
   ...targetOptions,
   all: flag({ description: 'Select every skill bundled with this CLI.' }),
   group: repeatableOption(string(), { description: 'Select an author-defined group.' }),
-  yes: flag({ short: 'y', description: 'Skip confirmation; does not override conflicts.' }),
+  yes: flag({ short: 'y', description: 'Skip confirmation, including directory replacement.' }),
   dryRun: flag({ description: 'Preview without writing files.' }),
 }
 
@@ -106,7 +104,7 @@ export function createSkillsCommands(bundle: SkillBundle, mount = 'skills', grou
         ...names.map(name => ({
           label: `${name} (${[...new Set(installed.items.filter(item => item.name === name).map(item => item.status))].join(', ')})`,
           value: `skill:${name}`,
-           description: bundle.skills[name]!.description,
+          description: bundle.skills[name]!.description,
         })),
       ]
       const selected = await ctx.input.multiselect({
@@ -130,7 +128,7 @@ export function createSkillsCommands(bundle: SkillBundle, mount = 'skills', grou
         )
     for (const item of plan.items)
       ctx.io.stderr.write(
-        `  ${item.operation}: ${item.name} → ${item.path}${item.reason ? ` (${item.reason})` : ''}${item.backup ? ' (backup before replacement)' : ''}\n`,
+        `  ${item.operation}: ${item.name} → ${item.path}${item.reason ? ` (${item.reason})` : ''}\n`,
       )
     const installs = plan.items.filter(item => item.operation === 'install')
     ctx.io.stderr.write(
@@ -145,11 +143,6 @@ export function createSkillsCommands(bundle: SkillBundle, mount = 'skills', grou
       return plan
     }
     if (!options.json) preview(plan, ctx)
-    if (options.replace && !options.yes && (options.json || !ctx.io.interactive))
-      throw new CLIError(
-        'INTERACTION_REQUIRED',
-        'Use --yes with --replace to confirm backup and replacement without prompts',
-      )
     if (
       !options.yes &&
       !options.json &&
@@ -157,91 +150,31 @@ export function createSkillsCommands(bundle: SkillBundle, mount = 'skills', grou
       !(await ctx.input.confirm({ message: 'Proceed?', default: false }))
     )
       return { cancelled: true }
-    const result = await manager.apply(plan, { signal: ctx.signal }) as Mutable<Awaited<ReturnType<typeof manager.apply>>>
-    if (options.save) {
-      if (result.exitCode)
-        result.manifestError = {
-          code: 'SKILL_MANIFEST_INCOMPLETE',
-          message: 'Project selections were not saved because installation was incomplete',
-        }
-      else {
-        try {
-          result.manifest = await manager.save(plan, result)
-        } catch (error) {
-          if (!(error instanceof CLIError) && !['EACCES', 'EPERM', 'ENOSPC'].includes((error as NodeJS.ErrnoException).code!))
-            throw error
-          result.manifestError = {
-            code: error instanceof CLIError ? error.code : 'SKILL_MANIFEST_WRITE',
-            message:
-              error instanceof CLIError
-                ? error.message
-                 : `Cannot save project manifest (${(error as NodeJS.ErrnoException).code})`,
-          }
-          result.exitCode = 1
-        }
-      }
-    }
+    const result = await manager.apply(plan, { signal: ctx.signal })
     ctx.exitCode = result.exitCode
     if (options.json) ctx.io.json(result)
     else
       for (const item of result.items)
         ctx.io.stdout.write(
-          `${item.status}: ${item.name} → ${item.path}${item.reason ? ` (${item.reason})` : ''}${item.backup ? `; backup: ${item.backup}` : ''}\n`,
+          `${item.status}: ${item.name} → ${item.path}${item.reason ? ` (${item.reason})` : ''}\n`,
         )
-    if (!options.json && result.manifestError)
-      ctx.io.stderr.write(`Manifest not saved: ${result.manifestError.message}\n`)
     return result
   }
   function managed(action: SkillPlan['action']) {
-    const definitions: typeof actionOptions & { replace?: Argument<boolean, false, 'flag'>; save?: Argument<boolean, false, 'flag'> } = { ...actionOptions }
-    if (action !== 'remove')
-      definitions.replace = flag({ description: 'Back up and replace conflicting files.' })
-    if (action === 'add')
-      definitions.save = flag({
-        description: 'Save successful project selections to argrail.skills.json.',
-      })
     return defineCommand({
       description: `${action === 'add' ? 'Install' : action === 'update' ? 'Update' : 'Remove'} skills bundled with this CLI.`,
       args: [variadicArgument('names', string())],
-      options: definitions,
+      options: actionOptions,
       run: async ({ args, options: parsedOptions, ctx }) => {
         const options = parsedOptions as ManagementValues
         try {
-          if (options.save && (options.global || options.path !== undefined))
-            throw new CLIError(
-              'SKILL_MANIFEST',
-              '--save supports project harness destinations only',
-            )
           const destination = await target(options, ctx)
           const skills = await selection(args, options, ctx, destination)
-          let plan = await manager.plan({
+          const plan = await manager.plan({
             action,
             skills,
             target: destination,
-            replace: options.replace ?? false,
           })
-          if (
-            !options.yes &&
-            !options.json &&
-            !options.dryRun &&
-            ctx.io.interactive &&
-            plan.items.some(
-              item =>
-                item.operation === 'conflict' &&
-                item.reason.startsWith('Unmanaged or modified files'),
-            )
-          ) {
-            preview(plan, ctx)
-            const conflict = await ctx.input.select({
-              message: 'Existing files conflict with this installation',
-              choices: [
-                { label: 'Keep existing files (report conflicts)', value: 'keep' },
-                { label: 'Back up and replace conflicting files', value: 'replace' },
-              ],
-            })
-            if (conflict === 'replace')
-              plan = await manager.plan({ action, skills, target: destination, replace: true })
-          }
           return await executePlan(plan, options, ctx)
         } catch (error) {
           return failure(error, options, ctx)
@@ -297,51 +230,6 @@ export function createSkillsCommands(bundle: SkillBundle, mount = 'skills', grou
             for (const item of result.items)
               ctx.io.stdout.write(
                 `${item.status}: ${item.name} → ${item.path}${item.hint ? `; ${item.hint}` : ''}\n`,
-              )
-          return result
-        } catch (error) {
-          return failure(error, options, ctx)
-        }
-      },
-    }),
-    restore: defineCommand({
-      description: 'Restore saved project selections from this exact CLI bundle.',
-      options: {
-        project: targetOptions.project,
-        json: targetOptions.json,
-        yes: actionOptions.yes,
-        dryRun: actionOptions.dryRun,
-      },
-      run: async ({ options, ctx }) => {
-        try {
-          return await executePlan(await manager.restore(options.project), options, ctx)
-        } catch (error) {
-          return failure(error, options, ctx)
-        }
-      },
-    }),
-    recover: defineCommand({
-      description: 'Recover an interrupted installation at the selected target.',
-      options: { ...targetOptions, yes: actionOptions.yes },
-      run: async ({ options, ctx }) => {
-        try {
-          const destination = await target(options, ctx)
-          if (!options.yes && (options.json || !ctx.io.interactive))
-            throw new CLIError('INTERACTION_REQUIRED', 'Use --yes to recover without prompts')
-          if (
-            !options.yes &&
-            !(await ctx.input.confirm({
-              message: 'Recover interrupted installation?',
-              default: false,
-            }))
-          )
-            return { cancelled: true }
-          const result = await manager.recover(destination)
-          if (options.json) ctx.io.json(result)
-          else
-            for (const item of result.items)
-              ctx.io.stdout.write(
-                `${item.recovered ? 'recovered' : 'no recovery needed'}: ${item.path}\n`,
               )
           return result
         } catch (error) {

@@ -215,7 +215,7 @@ export async function generate(config: ProjectConfig, { scaffold = false } = {})
     files: [specifier(resolve(config.root, '.argrail/tsconfig.json'), config.entry ?? entry), specifier(resolve(config.root, '.argrail/tsconfig.json'), config.generatedRegistry)],
     exclude: [],
   }, null, 2) + '\n')
-  return { changed, count: commands.length + (skillBundle ? 8 : 0), entry: config.entry ?? entry }
+  return { changed, count: commands.length + (skillBundle ? 6 : 0), entry: config.entry ?? entry }
 }
 
 export async function addCommand(config: ProjectConfig, path: string) {

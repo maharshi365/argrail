@@ -101,22 +101,26 @@ Missing selections prompt only on an interactive terminal. The simple numbered
 picker includes descriptions, destination-specific state, groups, and an `all`
 selection. It has no search box. Harness detection supplies suggestions only.
 
-Fully specified safe operations work without a terminal. `--yes` skips
-confirmation but never overrides conflicts. `--replace` permits add/update
-replacement with a backup. Non-interactive replacement requires both flags.
-Interactive users can choose to keep conflicting files or back up and replace.
-Removal never discards edited or unowned files.
+Fully specified operations work without a terminal. Interactive operations show
+a preview and ask for confirmation. `--yes` skips confirmation, including
+directory replacement.
+
+Add and update replace the entire selected skill directory with the bundled
+files. This removes local edits, user-added files, and obsolete resources. Update
+requires an existing skill directory; use add for a missing installation. Remove
+deletes the selected skill directory, including any local changes. Other skill
+directories are left untouched.
 
 `--dry-run` returns the same plan without writes. `--json` never prompts and
 returns structured results; parser errors still use the framework's standard
 error presentation. Blocked work returns a nonzero exit code. Every requested
 destination appears in the result, including ordinary write failures.
 
-Updates only affect instances owned by this CLI. They do not add previously
-unselected harnesses. The running CLI's bundle is the update source: upgrade
-the CLI first to obtain newer skills. Installation uses copies, never symlinks.
+The running CLI's bundle is the update source: upgrade the CLI first to obtain
+newer skills. Installation uses copies, never symlinks. Existing skill-directory
+links and special files are refused; move them aside before proceeding.
 
-## Shared roots and ownership
+## Shared roots and file operations
 
 Some harnesses share `.agents/skills`. Selecting one of them does not provide
 harness-only isolation. The preview warns that other compatible harnesses may
@@ -124,67 +128,25 @@ also see the files. Resolved roots, including links/junctions, are deduplicated.
 Explicitly selected harnesses get their required directories created or a
 visible failure.
 
-Each destination has a versioned `.argrail-skills.json` receipt. It tracks the
-bundle identity, content hashes, file hashes, executable intent, and ownership
-claims. Identical content can have more than one owning CLI. Removing one owner
-does not remove another owner's installation. Different content cannot replace
-an installation that another CLI still owns.
+Replacing or removing a directory in a shared root affects every harness that
+reads it. There is no ownership tracking between harnesses or CLIs. Use distinct
+skill names to avoid overwriting another CLI's files.
 
-Removing one recorded harness claim also preserves other claims at the same
-shared root. The result says `released`, not `removed`: the selected harness can
-still read those shared files. To remove the shared installation, select all its
-recorded harnesses or use the explicit physical `--path`. Other CLI owners are
-still protected.
+Skill management writes only the installed skill files. It does not create
+receipts, manifests, locks, journals, staging directories, or backups. There are
+no save, restore, or recovery commands. Installation never runs a bundled script
+or changes harness tool permissions.
 
-Existing unmanaged directories and local changes are conflicts. Argrail also
-detects extra local files. Replacement backups remain under
-`.argrail-skills-backups/<transaction>/<skill>` and their paths are reported.
-Installation never runs a bundled script or changes harness tool permissions.
-
-`skills status` reports `current`, `outdated`, `modified`, `missing`, or
-`unmanaged`, with a path and corrective hint. It never repairs files implicitly.
-
-## Recovery
-
-```text
-plan → confirm → lock → revalidate → stage → journal → apply → commit receipt
-```
+`skills status` compares installed files with the running CLI's bundle. It reports
+`current`, `different`, `missing`, or `unsafe`, with a path and corrective hint.
+It cannot distinguish local edits from an older version. It never repairs files
+implicitly.
 
 Plans are manager-local and cannot be edited or replayed after application.
-Changes made after approval require a fresh plan. Writes are recoverable per
-physical root, not atomic across separate harness directories. Successful roots
-can remain installed when another root fails; inspect the per-root results.
-
-An interrupted transaction blocks further installation at that root. To recover:
-
-```sh
-acme skills recover --harness claude-code --yes
-```
-
-Recovery restores uncommitted content and receipts, or finishes committed backup
-cleanup. It validates its staging directories before deleting anything.
-If files were edited after the interruption, move them aside before recovery;
-Argrail will not discard those edits. Unknown
-receipt versions and corrupt state are not silently reset. Receipt format v1 is
-the first format; later migrations must preserve existing ownership data.
-
-## Team save and restore
-
-```sh
-acme skills add --group deployment --harness claude-code --save --yes
-acme skills restore --project ./backend --yes
-```
-
-Commit the opt-in `argrail.skills.json` desired-state file. It stores bundle
-hashes, project-relative targets, and concrete skill selections per target.
-Repeated saves merge selections instead of losing earlier targets. Groups are
-expanded when saving, so changing a group does not silently change a saved set.
-Restore rejects a mismatched bundle or a changed harness path mapping.
-
-Global/custom installations are not saved in v1. Local ownership receipts,
-transaction directories, and backups are machine state, not desired state.
-Exclude them from version control as appropriate; Argrail does not edit your
-`.gitignore` automatically.
+Replacement is not atomic: a failed or interrupted write can leave a partial
+directory. Run add again to replace it with the complete bundle. Successful
+destinations can remain installed when another destination fails; inspect the
+per-destination results. Do not run simultaneous installations at the same root.
 
 ## Headless and handwritten use
 

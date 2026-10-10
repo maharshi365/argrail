@@ -62,20 +62,19 @@ test('help, listing, dry runs, and missing noninteractive selections never load 
     expect(await readdir(root)).toEqual([])
   }))
 
-test('yes never replaces local work; explicit replacement reports its backup', () =>
+test('add replaces local work and extra files without receipts or backups', () =>
   fixture(async ({ root, cli }) => {
     const target = resolve(root, 'skills')
     await mkdir(resolve(target, 'test-skill'), { recursive: true })
     await writeFile(resolve(target, 'test-skill/SKILL.md'), 'local work')
+    await writeFile(resolve(target, 'test-skill/extra.txt'), 'extra work')
     const args = ['skills', 'add', '--all', '--path', target, '--yes', '--json']
-    const blocked = await cli.test({ argv: args })
-    expect(blocked.exitCode).toBe(1)
-    expect(JSON.parse(blocked.stdout).items[0].status).toBe('blocked')
-    expect(await readFile(resolve(target, 'test-skill/SKILL.md'), 'utf8')).toBe('local work')
-    const replaced = await cli.test({ argv: [...args, '--replace'] })
+    const replaced = await cli.test({ argv: args })
     expect(replaced.exitCode).toBe(0)
-    const backup = JSON.parse(replaced.stdout).items[0].backup
-    expect(await readFile(resolve(backup, 'SKILL.md'), 'utf8')).toBe('local work')
+    expect(JSON.parse(replaced.stdout).items[0].status).toBe('installed')
+    expect(await readFile(resolve(target, 'test-skill/SKILL.md'), 'utf8')).toContain('Example')
+    expect(await readdir(resolve(target, 'test-skill'))).toEqual(['SKILL.md'])
+    expect(await readdir(target)).toEqual(['test-skill'])
   }))
 
 test('guided skill selection shows destination-specific status and refusal writes nothing', () =>
@@ -150,31 +149,13 @@ test('complete explicit targets create missing harness directories and shared ro
     )
   }))
 
-test('a manifest failure still reports successful installations and preserves the manifest', () =>
+test('management help exposes only direct file operations', () =>
   fixture(async ({ root, cli }) => {
-    await writeFile(resolve(root, 'argrail.skills.json'), 'user-owned invalid state')
-    const result = await cli.test({
-      argv: [
-        'skills',
-        'add',
-        '--all',
-        '--project',
-        root,
-        '--harness',
-        'claude-code',
-        '--save',
-        '--yes',
-        '--json',
-      ],
-    })
-    expect(result.exitCode).toBe(1)
-    const output = JSON.parse(result.stdout)
-    expect(output.items[0].status).toBe('installed')
-    expect(output.manifestError.code).toBe('SKILL_STATE')
-    expect(await readFile(resolve(root, 'argrail.skills.json'), 'utf8')).toBe(
-      'user-owned invalid state',
-    )
-    expect(await readFile(resolve(root, '.claude/skills/test-skill/SKILL.md'), 'utf8')).toContain(
-      'Example',
-    )
+    const help = await cli.test({ argv: ['help', 'skills', 'add'] })
+    expect(help.stdout).not.toContain('--save')
+    expect(help.stdout).not.toContain('--replace')
+    const groupHelp = await cli.test({ argv: ['help', 'skills'] })
+    expect(groupHelp.stdout).not.toContain('restore')
+    expect(groupHelp.stdout).not.toContain('recover')
+    expect(await readdir(root)).toEqual([])
   }))

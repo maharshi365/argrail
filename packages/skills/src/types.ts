@@ -50,12 +50,9 @@ export type SkillPlanItem = {
   readonly root: string
   readonly path: string
   readonly harnesses: readonly string[]
-  readonly remainingHarnesses: readonly string[]
-  readonly operation: 'install' | 'noop' | 'claim' | 'release' | 'remove' | 'conflict'
+  readonly operation: 'install' | 'noop' | 'remove' | 'conflict'
   readonly reason: string
-  readonly fingerprint: string
   readonly exists: boolean
-  readonly backup: boolean
   readonly fileCount: number
   readonly bytes: number
 }
@@ -68,7 +65,6 @@ export type SkillPlan = {
     readonly root: string
     readonly harnesses: readonly string[]
     readonly shared: readonly string[]
-    readonly receiptHash: string
   }[]
   readonly items: readonly SkillPlanItem[]
 }
@@ -76,8 +72,6 @@ export type SkillResult = {
   readonly bundleId: string
   readonly bundleHash: string
   readonly exitCode: number
-  readonly manifest?: string
-  readonly manifestError?: { readonly code: string; readonly message: string }
   readonly items: readonly {
     readonly name: string
     readonly path: string
@@ -85,15 +79,11 @@ export type SkillResult = {
     readonly status:
       | 'installed'
       | 'removed'
-      | 'released'
-      | 'claimed'
       | 'unchanged'
       | 'blocked'
       | 'missing'
       | 'failed'
     readonly reason?: string
-    readonly backup?: string
-    readonly recoveryRequired?: boolean
   }[]
 }
 export interface HarnessSettings {
@@ -107,7 +97,6 @@ export interface SkillManager<B extends SkillBundle> {
     request: SkillSelection<B> & {
       action: 'add' | 'update' | 'remove'
       target: SkillTarget
-      replace?: boolean
     },
   ): Promise<SkillPlan>
   apply(plan: SkillPlan, settings?: { signal?: AbortSignal }): Promise<SkillResult>
@@ -118,14 +107,10 @@ export interface SkillManager<B extends SkillBundle> {
       name: string
       path: string
       harnesses: string[]
-      status: 'missing' | 'unmanaged' | 'modified' | 'outdated' | 'current'
-      recoveryRequired: boolean
+      status: 'missing' | 'different' | 'unsafe' | 'current'
       hint: string
     }[]
   }>
-  save(plan: SkillPlan, result: SkillResult): Promise<string>
-  restore(project?: string): Promise<SkillPlan>
-  recover(target: SkillTarget): Promise<{ items: { path: string; recovered: boolean }[] }>
 }
 type BooleanOption = Argument<boolean, false, 'flag'>
 type TextOption = Argument<string | undefined, false, 'option', string | undefined>
@@ -148,20 +133,12 @@ type ActionOptions<B extends SkillBundle> = TargetOptions & {
   yes: BooleanOption
   dryRun: BooleanOption
 }
-type Action = 'add' | 'update' | 'remove' | 'delete' | 'list' | 'status' | 'restore' | 'recover'
-type ManagementOptions<A extends Action, B extends SkillBundle> = A extends 'add'
-  ? ActionOptions<B> & { replace: BooleanOption; save: BooleanOption }
-  : A extends 'update'
-    ? ActionOptions<B> & { replace: BooleanOption }
-    : A extends 'remove' | 'delete'
-      ? ActionOptions<B>
-      : A extends 'list'
-        ? { json: BooleanOption }
-        : A extends 'restore'
-          ? { project: TextOption; json: BooleanOption; yes: BooleanOption; dryRun: BooleanOption }
-          : A extends 'recover'
-            ? TargetOptions & { yes: BooleanOption }
-            : TargetOptions
+type Action = 'add' | 'update' | 'remove' | 'delete' | 'list' | 'status'
+type ManagementOptions<A extends Action, B extends SkillBundle> = A extends 'add' | 'update' | 'remove' | 'delete'
+  ? ActionOptions<B>
+  : A extends 'list'
+    ? { json: BooleanOption }
+    : TargetOptions
 type ManagementArgs<A extends Action, B extends SkillBundle> = A extends
   | 'add'
   | 'update'
@@ -188,9 +165,7 @@ type ManagementResult<A extends Action, B extends SkillBundle> = A extends 'list
   ? SkillList<B>
   : A extends 'status'
     ? Awaited<ReturnType<SkillManager<B>['status']>> | CommandFailure
-    : A extends 'recover'
-      ? Awaited<ReturnType<SkillManager<B>['recover']>> | Cancelled | CommandFailure
-      : SkillResult | SkillPlan | Cancelled | CommandFailure
+    : SkillResult | SkillPlan | Cancelled | CommandFailure
 type ManagementCommand<Mount extends string, A extends Action, B extends SkillBundle> = Command<
   `/${Mount}/${A}`,
   {},
