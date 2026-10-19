@@ -1,6 +1,6 @@
 {
   "name": "@argrail/skills",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Bundled skill management for Argrail command-line apps.",
   "license": "MIT",
   "repository": {

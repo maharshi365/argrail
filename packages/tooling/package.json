@@ -1,6 +1,6 @@
 {
   "name": "@argrail/tooling",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Code generation, checks, and builds for Argrail command-line apps.",
   "license": "MIT",
   "repository": {

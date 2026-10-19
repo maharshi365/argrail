@@ -24,11 +24,11 @@
     },
     "packages/core": {
       "name": "@argrail/core",
-      "version": "0.0.1",
+      "version": "0.0.2",
     },
     "packages/skills": {
       "name": "@argrail/skills",
-      "version": "0.0.1",
+      "version": "0.0.2",
       "dependencies": {
         "@argrail/core": "workspace:*",
         "yaml": "^2.8.1",
@@ -36,7 +36,7 @@
     },
     "packages/tooling": {
       "name": "@argrail/tooling",
-      "version": "0.0.1",
+      "version": "0.0.2",
       "bin": {
         "argrail": "./dist/argrail.js",
       },

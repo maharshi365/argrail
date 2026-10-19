@@ -61,3 +61,28 @@ Run `bun run check:lib` to check library code, scripts, and runtime tests, or
 `packages/core/tests/*.test-d.ts` and are compiled, not run. Use
 `expectTypeOf(...).toEqualTypeOf<...>()` for exact inferred types and
 `@ts-expect-error` for API calls that must fail to compile.
+
+## Publishing
+
+From the repository root, preview a release:
+
+```sh
+bun run release --dry-run
+```
+
+Then publish:
+
+```sh
+bun run release
+```
+
+Both commands check types, build all packages, run tests, and check lint without
+applying fixes. They then publish directly from `packages/core`, `packages/skills`,
+and `packages/tooling`, in dependency order. Bun converts `workspace:*` dependencies
+to the workspace versions. No manual tarball step is needed.
+
+Sign in to npm with an account that can publish to `@argrail`. Run the command in
+an interactive terminal so you can complete npm's authentication prompts. Update
+package versions before each new release; published versions cannot be replaced.
+The command stops at the first failure. Earlier packages may already be published
+if a later package fails.
