@@ -6,7 +6,7 @@
       "name": "argrail",
       "devDependencies": {
         "@types/bun": "^1.4.2",
-        "ai-deslop": "^0.4.5",
+        "ai-deslop": "^0.4.8",
         "oxfmt": "^0.72.0",
         "oxlint": "^1.87.0",
         "oxlint-tsgolint": "^7.0.2003",
@@ -163,7 +163,7 @@
 
     "@types/node": ["@types/node@26.6.5", "", { "dependencies": { "undici-types": "~8.9.0" } }, "sha512-uMzsv9stDdofIZBx4UGh4Z9ZgXnGC9seRDscilBcTHAeOFk67MZg/k9bWVfO+bk4qZmG+l52hRnLwUiH2LnJTg=="],
 
-    "ai-deslop": ["ai-deslop@0.4.5", "", { "dependencies": { "@oxlint/plugins": "1.82.0", "@tailwindcss/node": "^4.3.3", "synckit": "^0.11.13" }, "peerDependencies": { "tailwindcss": "^4.0.0" }, "optionalPeers": ["tailwindcss"] }, "sha512-s8z8FRVALH3NkbWynKmTXUBuSkIRwoNz/4hJvnF6ZzzMzS+avoYwex9CR2tvEab6RCNAkA7cBtzewW0jpPNVAg=="],
+    "ai-deslop": ["ai-deslop@0.4.8", "", { "dependencies": { "@oxlint/plugins": "1.82.0", "@tailwindcss/node": "^4.3.3", "synckit": "^0.11.13" }, "peerDependencies": { "tailwindcss": "^4.0.0" }, "optionalPeers": ["tailwindcss"] }, "sha512-/BzHjduYeon7c6g7c9P4NrGu7bOkf4VdwIZGpa62gwoeTq2kC+JqIPWP6qaye38qMQXLl/jlLYtL97vqRQt26w=="],
 
     "bun-types": ["bun-types@1.4.2", "", { "dependencies": { "@types/node": "*" } }, "sha512-bxV1FgK7yBIzjRe5zBozIM4Bem11ZJcCXSrjWRG3YWLt8yFDePu4cLjpebO8OvPeIE9trbyPF4fuj3Cia4Fj3w=="],
 

@@ -1,15 +1,15 @@
 import { defineConfig } from 'oxlint'
-import { configs as deslopConfigs } from 'ai-deslop'
+import { configs } from 'ai-deslop'
 
 export default defineConfig({
   plugins: ['typescript', 'unicorn', 'oxc'],
   jsPlugins: ['ai-deslop'],
-  options: deslopConfigs.recommended.options,
+  options: configs.recommended.options,
   rules: {
-    ...deslopConfigs.recommended.rules,
-    // Temporarily skipped at the user's request.
-    'deslop/require-safety-comment-for-type-assertion': 'off',
+    ...configs.recommended.rules,
     'deslop/no-duplicate-types': 'error',
+    'deslop/no-reexports-outside-entrypoints': 'error',
+    'deslop/no-renamed-imports': 'error',
   },
   categories: {
     correctness: 'error',

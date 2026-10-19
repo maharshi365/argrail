@@ -99,6 +99,7 @@ export async function runMiddleware(
           'INVALID_MIDDLEWARE',
           'Middleware must return the result of next() or throw an error',
         )
+      // SAFETY: next() was called and the result has the required value field; dispatch reads only that field.
       return result as MiddlewareResult
     } finally {
       state.active = false

@@ -110,6 +110,7 @@ interface Process {
 }
 
 export function processRuntime() {
+  // SAFETY: Bun and Node expose these process ports and methods; absence is rejected below.
   const process = (globalThis as { process?: Process }).process
   if (!process) throw new CLIError('NO_PROCESS', 'A Bun or Node process is required')
   return {

@@ -33,6 +33,7 @@ export function schemaValue<Input, Output>(label: string, schema: StandardSchema
   function validate(input: unknown): Output {
     try {
       if (typeof schema === 'function') {
+        // SAFETY: the callback is the validation boundary and must reject invalid input; errors are normalized below.
         const output = schema(input as Input)
         if (output !== null && (typeof output === 'object' || typeof output === 'function') && 'then' in output && typeof output.then === 'function') {
           void Promise.resolve(output).catch(() => {})
@@ -98,6 +99,7 @@ export function choice<const T extends readonly [string, ...string[]]>(choices: 
     if (typeof input !== 'string' || !choices.includes(input)) {
       throw new ValidationError(`expected one of: ${choices.join(', ')}`)
     }
+    // SAFETY: the membership check above proves input is one of the literal choices.
     return input as T[number]
   }
   return value(choices.join('|'), { parse: validate, validate })

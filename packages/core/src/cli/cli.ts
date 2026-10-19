@@ -156,7 +156,10 @@ function tokenize(argv: readonly string[], entry: CompiledCommand): Tokens {
     if (alias && !repeated && Object.prototype.hasOwnProperty.call(result.options, alias.key)) result.errors.push(`option ${name} was supplied more than once`)
     function assign(text: string) {
       if (!alias) return
-      if (repeated) result.options[alias.key] = [...((result.options[alias.key] ?? []) as string[]), text]
+      if (repeated) {
+        const previous = result.options[alias.key]
+        result.options[alias.key] = [...(Array.isArray(previous) ? previous : []), text]
+      }
       else result.options[alias.key] = text
     }
     if (!entry.arities.get(name)) {
@@ -189,6 +192,7 @@ function decodeArguments(definitions: Arguments, supplied: unknown, label: strin
   }
   if (schema) return schemaValue(`${label} values`, schema).validate(supplied)
   for (const [key, descriptor] of Object.entries(definitions)) {
+    // SAFETY: supplied is a non-null object; descriptors validate each property before use.
     const input = Object.prototype.hasOwnProperty.call(supplied, key) ? (supplied as Input<Arguments>)[key] : undefined
     if (input === undefined) {
       if (descriptor.hasDefault) result[key] = descriptor.value.validate(descriptor.defaultValue)
@@ -199,10 +203,15 @@ function decodeArguments(definitions: Arguments, supplied: unknown, label: strin
     try {
       if (shell && descriptor.element && (descriptor.repeated || descriptor.variadic)) {
         const element = descriptor.element
+        // SAFETY: shell tokenization stores repeated options and variadic arguments as string arrays.
         result[key] = (input as string[]).map(text => element.decode ? element.decode(text) : element.validate(element.parse(text)))
       }
-      else if (shell && descriptor.kind !== 'flag' && descriptor.value.decode) result[key] = descriptor.value.decode(input as string)
+      else if (shell && descriptor.kind !== 'flag' && descriptor.value.decode) {
+        // SAFETY: shell tokenization stores non-flag, non-collection values as strings.
+        result[key] = descriptor.value.decode(input as string)
+      }
       else {
+        // SAFETY: shell tokenization stores non-flag, non-collection values as strings.
         const decoded = shell && descriptor.kind !== 'flag' ? descriptor.value.parse(input as string) : input
         result[key] = descriptor.value.validate(decoded)
       }
@@ -344,6 +353,7 @@ export function createCLI<const R extends Registry>(registry: R & { [P in keyof 
   }
 
   async function invoke<const P extends ExecutablePaths<R>>(path: P & (IsUnion<P> extends true ? never : unknown), input: CommandInput<NoInfer<R[P]>>, execution: ExecutionOptions = {}): Promise<CommandResult<R[P]>> {
+    // SAFETY: Registry is the generic constraint; widening permits a missing key from untyped callers to be checked below.
     const command = (registry as Registry)[path]
     if (!command?.run) throw new ValidationError('unknown command or command is not executable')
     // oxlint-disable-next-line deslop/no-runtime-typeof -- Validate the public invocation boundary for JavaScript callers.
@@ -357,6 +367,7 @@ export function createCLI<const R extends Registry>(registry: R & { [P in keyof 
     const ctx = await context(createIO(execution.io ?? memoryPorts()), execution.signal ?? new AbortController().signal)
     const result = await dispatch(command, params, options, args, ctx)
     checkSignal(ctx.signal)
+    // SAFETY: dispatch runs the command at path P and preserves its handler's return value.
     return result as CommandResult<R[P]>
   }
 

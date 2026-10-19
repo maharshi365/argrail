@@ -16,7 +16,7 @@
     "check": "bun run check:lib && bun run test:types",
     "check:lib": "tsc --noEmit",
     "test:types": "tsc --noEmit -p tsconfig.types.json",
-    "lint": "oxlint --config oxlint.config.mjs --deny-warnings --fix .",
+    "lint": "node node_modules/oxlint/bin/oxlint --config oxlint.config.mjs --deny-warnings --fix .",
     "format": "oxfmt --write .",
     "generate:demo": "bun packages/tooling/dist/argrail.js generate --project examples/demo",
     "check:demo": "bun packages/tooling/dist/argrail.js check --project examples/demo",
@@ -25,7 +25,7 @@
   },
   "devDependencies": {
     "@types/bun": "^1.4.2",
-    "ai-deslop": "^0.4.5",
+    "ai-deslop": "^0.4.8",
     "oxfmt": "^0.72.0",
     "oxlint": "^1.87.0",
     "oxlint-tsgolint": "^7.0.2003",

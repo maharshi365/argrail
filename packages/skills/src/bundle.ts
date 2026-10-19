@@ -36,6 +36,7 @@ async function executablePaths(directory: string) {
       if (match) paths.add(match[1]!)
     }
   } catch (error) {
+    // SAFETY: execute wraps Node's execFile, whose rejection carries the code and killed process-error fields.
     const failure = error as NodeJS.ErrnoException & { killed?: boolean }
     if (!['ENOENT', 128, 'ETIMEDOUT'].includes(failure.code!) && !failure.killed) throw error
   }

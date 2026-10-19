@@ -87,6 +87,7 @@ export function createSkillsCommands(bundle: SkillBundle, mount = 'skills', grou
     }
     const result: HarnessTarget = { scope, harnesses }
     if (options.project !== undefined) result.project = options.project
+    // SAFETY: global and project were checked for mutual exclusion before building this target.
     return result as SkillTarget
   }
   async function selection(args: { names: string[] }, options: ActionValues, ctx: CommandContext, destination: SkillTarget) {
@@ -166,7 +167,7 @@ export function createSkillsCommands(bundle: SkillBundle, mount = 'skills', grou
       args: [variadicArgument('names', string())],
       options: actionOptions,
       run: async ({ args, options: parsedOptions, ctx }) => {
-        const options = parsedOptions as ManagementValues
+        const options: ManagementValues = parsedOptions
         try {
           const destination = await target(options, ctx)
           const skills = await selection(args, options, ctx, destination)
@@ -239,6 +240,7 @@ export function createSkillsCommands(bundle: SkillBundle, mount = 'skills', grou
     }),
   }
   const aliases = { ...commands, delete: commands.remove }
+  // SAFETY: aliases contains all six management commands and each key is prefixed with the validated mount.
   return defineRegistry(
     Object.fromEntries(
       Object.entries(aliases).map(([name, command]) => {

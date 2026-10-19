@@ -28,6 +28,7 @@ const params: StandardSchema<{ id: string }, { id: number }> = {
   '~standard': {
     version: 1,
     vendor: 'test',
+    // SAFETY: this compile-only fixture models the declared schema input, not runtime validation.
     validate: input => ({ value: { id: Number((input as { id: string }).id) } }),
   },
 }

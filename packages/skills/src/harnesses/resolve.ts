@@ -49,6 +49,7 @@ export function listHarnesses({
   environment = process.env,
   scope = 'project',
 }: HarnessSettings = {}): Harness[] {
+  // SAFETY: the checked-in registry is generated from validated PathRule entries by sync-harnesses.ts.
   return (registry as HarnessRegistry).harnesses.map(harness => {
     const global = harness.global ? evaluate(harness.global, home, environment) : undefined
     const result: Harness = {

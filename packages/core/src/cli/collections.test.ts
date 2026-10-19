@@ -12,8 +12,9 @@ test('decodes repeated aliases and trailing values without consuming command wor
   expect(result.exitCode).toBe(0)
   expect(result.value).toEqual({ args: { prefix: 'batch', names: [1, 2] }, options: { harness: ['codex', 'cursor'] } })
   expect(await cli.invoke('/skills/add', { args: { prefix: 'batch', names: [3] }, options: { harness: ['codex'] } })).toEqual({ args: { prefix: 'batch', names: [3] }, options: { harness: ['codex'] } })
-  expect(cli.help('/skills/add')).toContain('[names...]')
-  expect(cli.help('/skills/add')).toContain('--harness <text>')
+  const help = cli.help('/skills/add')
+  expect(help).toContain('[names...]')
+  expect(help).toContain('--harness <text>')
 })
 
 test('collection defaults and invalid elements use normal validation', async () => {

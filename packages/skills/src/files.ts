@@ -77,7 +77,7 @@ export async function stat(path: string) {
   try {
     return await lstat(path)
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined
+    if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return undefined
     throw error
   }
 }

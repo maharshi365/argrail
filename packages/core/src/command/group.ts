@@ -6,6 +6,7 @@ export interface Group<M extends MiddlewareList = MiddlewareList> {
 export function defineGroup<const M extends MiddlewareList = []>(
   config: { middleware?: M } = {},
 ): Group<M> {
+  // SAFETY: middleware is preserved as M when supplied; the default middleware tuple is empty.
   return { middleware: config.middleware ?? [] } as Group<M>
 }
 export const defineRoot = defineGroup

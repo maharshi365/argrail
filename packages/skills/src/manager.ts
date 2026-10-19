@@ -213,11 +213,10 @@ export function createSkills(
           } else results.push({ ...result, status: 'unchanged' })
         } catch (error) {
           checkSignal(signal)
+          const code = error instanceof Error && 'code' in error ? error.code : undefined
           if (
             !(error instanceof CLIError) &&
-            !['EACCES', 'EPERM', 'ENOSPC', 'ENOENT', 'EEXIST', 'ENOTDIR', 'EIO'].includes(
-              (error as NodeJS.ErrnoException).code!,
-            )
+            !new Set(['EACCES', 'EPERM', 'ENOSPC', 'ENOENT', 'EEXIST', 'ENOTDIR', 'EIO']).has(String(code))
           )
             throw error
           results.push({
@@ -226,7 +225,7 @@ export function createSkills(
             reason:
               error instanceof CLIError
                 ? error.message
-                : `Cannot write destination (${(error as NodeJS.ErrnoException).code})`,
+                : `Cannot write destination (${String(code)})`,
           })
         }
       }

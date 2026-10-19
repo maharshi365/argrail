@@ -25,6 +25,7 @@ export function extractHarnesses(source: string): HarnessRegistry['harnesses'] {
     true,
     ts.ScriptKind.TS,
   )
+  // SAFETY: TypeScript's parser attaches parseDiagnostics to every SourceFile, but omits it from the public interface.
   if ((file as ts.SourceFile & { parseDiagnostics: readonly ts.Diagnostic[] }).parseDiagnostics.length)
     throw new Error(
       'Upstream registry contains invalid TypeScript; existing registry was not changed',
@@ -230,7 +231,7 @@ export async function syncHarnesses(args: string[] = [], outputDirectory = desti
     try {
       existing = await readFile(resolve(outputDirectory, name), 'utf8')
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+      if (!(error instanceof Error) || !('code' in error) || error.code !== 'ENOENT') throw error
     }
     if (existing === content) continue
     if (check) throw new Error(`${name} is not synchronized with ${commit}`)

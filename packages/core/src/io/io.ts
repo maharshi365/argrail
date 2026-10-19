@@ -27,7 +27,10 @@ export function createIO(ports: IOPorts): IO {
     ...ports,
     json(value) {
       let text: string | undefined
-      try { text = JSON.stringify(value) as string | undefined }
+      try {
+        // SAFETY: JSON.stringify can return undefined for untyped callers or a toJSON method; the check below rejects it.
+        text = JSON.stringify(value) as string | undefined
+      }
       catch { throw new CLIError('OUTPUT_ERROR', 'Output is not JSON serializable') }
       if (text === undefined) throw new CLIError('OUTPUT_ERROR', 'Output is not JSON serializable')
       ports.stdout.write(text + '\n')
