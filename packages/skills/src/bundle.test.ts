@@ -4,7 +4,7 @@ import { resolve } from 'node:path'
 import { tmpdir } from 'node:os'
 import { discoverSkills, parseSkillGroups } from './bundle.ts'
 
-async function fixture(run) {
+async function fixture(run: (root: string) => Promise<void>) {
   const root = await mkdtemp(
     resolve(
       process.env.TEMP ? resolve(process.env.TEMP, 'opencode') : tmpdir(),
@@ -57,10 +57,10 @@ test('discovers only explicit skill children and bundles binary resources determ
     }
     const first = await discoverSkills(config)
     expect(Object.keys(first.skills)).toEqual(['test-skill'])
-    expect(first.files['test-skill'].map(file => file.path)).toContain('references/SKILL.md')
+    expect(first.files['test-skill']!.map(file => file.path)).toContain('references/SKILL.md')
     expect(
       Buffer.from(
-        first.files['test-skill'].find(file => file.path.endsWith('.bin')).data,
+        first.files['test-skill']!.find(file => file.path.endsWith('.bin'))!.data,
         'base64',
       ),
     ).toEqual(Buffer.from([0, 255, 1]))

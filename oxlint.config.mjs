@@ -20,5 +20,10 @@ export default defineConfig({
   globals: {
     Bun: 'readonly',
   },
+  overrides: [{
+    files: ['**/*.test.ts'],
+    // Bun's promise matchers return promises at runtime but are declared as void.
+    rules: { 'typescript/await-thenable': 'off' },
+  }],
   ignorePatterns: ['**/node_modules/**', '**/dist/**', '**/.argrail/**', '**/*.gen.ts'],
 })

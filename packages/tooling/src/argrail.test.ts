@@ -7,8 +7,10 @@ import { tmpdir } from 'node:os'
 const root = resolve(import.meta.dir, '../../..')
 const tooling = resolve(import.meta.dir, '../dist/argrail.js')
 
-function run(command, args, cwd) {
-  return new Promise((resolveResult, reject) => {
+type RunResult = { code: number | null; stdout: string; stderr: string }
+
+function run(command: string, args: string[], cwd: string) {
+  return new Promise<RunResult>((resolveResult, reject) => {
     const child = spawn(command, args, { cwd, stdio: ['ignore', 'pipe', 'pipe'] })
     let stdout = '', stderr = ''
     child.stdout.on('data', data => { stdout += data })
@@ -118,7 +120,7 @@ await cli.run()\n`
     const built = await run(process.execPath, [tooling, 'build', '--project', project], root)
     expect(built.code, built.stdout + built.stderr).toBe(0)
     expect(await readFile(resolve(project, 'src/cli.ts'), 'utf8')).toBe(entry)
-    const executed = await new Promise((resolveResult, reject) => {
+    const executed = await new Promise<RunResult>((resolveResult, reject) => {
       const child = spawn('node', [resolve(project, 'dist/fixture.js'), 'read'], { cwd: project, stdio: ['pipe', 'pipe', 'pipe'] })
       let stdout = '', stderr = ''
       child.stdout.on('data', data => { stdout += data })
@@ -161,7 +163,7 @@ export const Command = createFileCommand('/login')({ run: ({ ctx }) => {
   ctx.io.stdout.write('login\\n')
 } })\n`)
     await writeFile(resolve(project, 'argrail.config.json'), '{"name":"fixture","entry":"src/cli.ts"}\n')
-    const entry = authenticated => `import { createCLI } from '@argrail/core'
+    const entry = (authenticated: boolean) => `import { createCLI } from '@argrail/core'
 import { commandTree } from './commandTree.gen.ts'
 await createCLI(commandTree, { name: 'fixture', context: () => ({ authenticated: ${authenticated} }) }).run()\n`
     await writeFile(resolve(project, 'src/cli.ts'), entry(false))
@@ -207,13 +209,13 @@ cli.invoke('/greet', { options: { name: 'Ada' } })\n`)
 
 test('background mode tracks route names, source edits, and config changes without executing commands', async () => {
   const project = await setup()
-  let child
+  let child: ReturnType<typeof spawn> | undefined
   let output = ''
   let allOutput = ''
-  const waiters = []
-  function waitFor(text) {
+  const waiters: { text: string; resolve: () => void }[] = []
+  function waitFor(text: string) {
     if (output.includes(text)) return Promise.resolve()
-    return new Promise((resolveResult, reject) => {
+    return new Promise<void>((resolveResult, reject) => {
       const timeout = setTimeout(() => reject(new Error(`Timed out waiting for ${text}\n${output}`)), 15000)
       waiters.push({ text, resolve: () => { clearTimeout(timeout); resolveResult() } })
     })
@@ -223,13 +225,13 @@ test('background mode tracks route names, source edits, and config changes witho
     await mkdir(resolve(project, 'src/commands/tasks/$id'), { recursive: true })
     await writeFile(resolve(project, 'src/commands/tasks/$id/run.ts'), '')
     child = spawn(process.execPath, [tooling, 'dev', '--project', project], { cwd: root, stdio: ['ignore', 'pipe', 'pipe'] })
-    function collect(data) {
+    function collect(data: Buffer) {
       output += data
       allOutput += data
       for (const waiter of waiters) if (output.includes(waiter.text)) waiter.resolve()
     }
-    child.stdout.on('data', collect)
-    child.stderr.on('data', collect)
+    child.stdout!.on('data', collect)
+    child.stderr!.on('data', collect)
     await waitFor('Found 0 errors')
     expect(await readFile(resolve(project, 'src/commands/tasks/$id/run.ts'), 'utf8')).toContain('id: positional(string())')
     await rename(resolve(project, 'src/commands/greet.ts'), resolve(project, 'src/commands/hello.ts'))
@@ -249,7 +251,8 @@ test('background mode tracks route names, source edits, and config changes witho
     expect(allOutput).not.toContain('HANDLER_WAS_EXECUTED')
   } finally {
     if (child) {
-      const exited = new Promise(resolveResult => child.once('exit', resolveResult))
+      const running = child
+      const exited = new Promise(resolveResult => running.once('exit', resolveResult))
       child.kill('SIGTERM')
       await exited
     }

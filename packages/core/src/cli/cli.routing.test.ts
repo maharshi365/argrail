@@ -62,7 +62,7 @@ test('omitted options ignore Object.prototype properties', async () => {
   const result = await cli.test({ argv: ['build'] })
   expect(result.exitCode).toBe(0)
   expect(result.value).toEqual({ constructor: undefined, toString: undefined })
-  expect(await cli.invoke(command.path, {})).toEqual(result.value)
+  expect(await cli.invoke(command.path, {})).toEqual({ constructor: undefined, toString: undefined })
 })
 
 test('inherited values do not satisfy required programmatic parameters', async () => {
@@ -73,5 +73,6 @@ test('inherited values do not satisfy required programmatic parameters', async (
 })
 
 test('inherited properties cannot hide mismatched parameter definitions', () => {
+  // @ts-expect-error Verify runtime rejection of mismatched parameter definitions.
   expect(() => bindCommand('/$constructor', defineCommand({ params: { id: positional(string()) }, run: () => {} }))).toThrow('positional definitions')
 })

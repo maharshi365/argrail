@@ -2,14 +2,17 @@ import { test, expect } from 'bun:test'
 import { createCLI, createFileCommand, defineCommand, bindCommand } from '../index.ts'
 import { z } from 'zod'
 import * as v from 'valibot'
+import type { StandardSchema } from '../index.ts'
 
-function schema(validate) {
-  return { '~standard': { version: 1, vendor: 'test', validate } }
+// oxlint-disable-next-line deslop/no-unsafe-dictionary-type -- Test schemas validate raw parameter and option bags.
+function schema<T extends Record<string, unknown>, Input extends Record<string, unknown> = Record<string, unknown>>(validate: (input: Input) => { value: T } | { issues: { message: string; path?: string[] }[] } | Promise<{ value: T }>): StandardSchema<Input, T> {
+  // SAFETY: test callers provide object bags through the command validation boundary.
+  return { '~standard': { version: 1, vendor: 'test', validate: input => validate(input as Input) } }
 }
 
 test('whole-object schemas own defaults and transformations for shell and invocation', async () => {
   const command = createFileCommand('/users/$id')({
-    validateParams: schema(input =>
+    validateParams: schema<{ id: number }, { id: string }>(input =>
       /^\d+$/.test(input.id)
         ? { value: { id: Number(input.id) } }
         : { issues: [{ message: 'Expected digits' }] },
@@ -34,7 +37,7 @@ test('whole-object schemas own defaults and transformations for shell and invoca
   expect(await cli.invoke(command.path, { params: { id: '43' }, options: { limit: '7' } })).toEqual(
     { id: 43, limit: 7, verbose: false },
   )
-  expect((await cli.test({ argv: ['users', '42', '--no-verbose'] })).value.verbose).toBe(false)
+  expect((await cli.test({ argv: ['users', '42', '--no-verbose'] })).value).toMatchObject({ verbose: false })
 })
 
 test('whole-object validation failures prevent context and handler execution', async () => {
@@ -96,10 +99,13 @@ test('schema commands support definition and binding', async () => {
 
 test('schema configuration rejects mixed ownership and missing option configuration', () => {
   const validator = schema(input => ({ value: input }))
+  // @ts-expect-error Verify runtime rejection of missing optionConfig.
   expect(() => createFileCommand('/check')({ validateOptions: validator })).toThrow('optionConfig')
   expect(() =>
+    // @ts-expect-error Schema and per-option ownership cannot be mixed.
     createFileCommand('/check')({ validateOptions: validator, optionConfig: {}, options: {} }),
   ).toThrow('options')
+  // @ts-expect-error Schema and per-parameter ownership cannot be mixed.
   expect(() => createFileCommand('/check')({ validateParams: validator, params: {} })).toThrow(
     'params',
   )
@@ -142,7 +148,8 @@ test('Zod and Valibot schemas work directly as whole-object validators', async (
 
 test('optionConfig validates CLI syntax and rejects unsupported settings', () => {
   const validator = schema(input => ({ value: input }))
-  const define = settings => createFileCommand('/check')({ validateOptions: validator, optionConfig: { count: settings } })
+  // oxlint-disable-next-line deslop/no-unsafe-dictionary-type -- Deliberately pass malformed option settings to runtime validation.
+  const define = (settings: Record<string, unknown>) => createFileCommand('/check')({ validateOptions: validator, optionConfig: { count: settings } })
   expect(() => define({ type: 'other' })).toThrow('invalid option type')
   expect(() => define({ short: 'long' })).toThrow('invalid short option')
   expect(() => define({ short: 'h' })).toThrow('reserved option')

@@ -4,9 +4,9 @@ import { argument, createCLI, createFileCommand, option, positional, schemaValue
 function numericSchema() {
   return {
     '~standard': {
-      version: 1, vendor: 'test',
-      // oxlint-disable-next-line deslop/no-runtime-typeof -- The test schema must reject non-string inputs before transforming them.
-      validate: input => typeof input === 'string' && /^\d+$/.test(input)
+      version: 1 as const, vendor: 'test',
+      // oxlint-disable-next-line deslop/no-runtime-typeof, deslop/no-unknown-parameters -- Standard Schema validators must reject untrusted non-string inputs.
+      validate: (input: unknown) => typeof input === 'string' && /^\d+$/.test(input)
         ? { value: Number(input) }
         : { issues: [{ message: 'Expected digits' }] },
     },
@@ -89,7 +89,7 @@ test('shell preprocessing failures use safe validation errors', async () => {
 })
 
 test('async schema validation is rejected with an actionable message', async () => {
-  const schema = { '~standard': { version: 1, vendor: 'test', validate: async () => ({ value: 42 }) } }
+  const schema = { '~standard': { version: 1 as const, vendor: 'test', validate: async () => ({ value: 42 }) } }
   const command = createFileCommand('/check')({ options: { count: option(schemaValue('count', schema)) }, run: () => {} })
   const result = await createCLI({ [command.path]: command }, { name: 'app' }).test({ argv: ['check', '--count', '42'] })
   expect(result.exitCode).toBe(2)

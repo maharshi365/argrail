@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { resolve } from 'node:path'
 import { commandPath, discover, generate, loadConfig, addCommand, skillsSnapshot } from './generator.ts'
 
-async function project(run) {
+async function project(run: (root: string, config: Awaited<ReturnType<typeof loadConfig>>) => Promise<void>) {
   const root = await mkdtemp(resolve(process.env.TEMP ? resolve(process.env.TEMP, 'opencode') : tmpdir(), 'argrail-test-'))
   try {
     await mkdir(resolve(root, 'src/commands'), { recursive: true })

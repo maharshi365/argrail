@@ -6,7 +6,11 @@ import { createCLI } from '@argrail/core'
 import { createSkillsCommands } from './commands.ts'
 import { hashFiles } from './files.ts'
 
-async function fixture(run) {
+async function fixture(run: (fixture: {
+  root: string
+  cli: Pick<ReturnType<typeof createCLI>, 'test' | 'execute'>
+  loads: () => number
+}) => Promise<void>) {
   const root = await mkdtemp(
     resolve(
       process.env.TEMP ? resolve(process.env.TEMP, 'opencode') : tmpdir(),
@@ -93,7 +97,7 @@ test('guided skill selection shows destination-specific status and refusal write
         stdin: {
           isTTY: true,
           async read() {
-            return answers.shift()
+            return answers.shift()!
           },
         },
       },
@@ -128,8 +132,7 @@ test('complete explicit targets create missing harness directories and shared ro
     })
     expect(result.exitCode).toBe(0)
     expect(result.stderr).toContain('Other compatible harnesses')
-    expect(result.value.items).toHaveLength(1)
-    expect(result.value.items[0].harnesses).toEqual(['codex', 'cursor'])
+    expect(result.value).toMatchObject({ items: [{ harnesses: ['codex', 'cursor'] }] })
     const missing = await cli.test({
       argv: [
         'skills',

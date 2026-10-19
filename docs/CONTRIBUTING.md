@@ -12,7 +12,8 @@ bun run dev:demo
 TypeScript, and emits JavaScript and declarations into each package's `dist/`.
 It needs network access. Sync or compiler failures stop the build.
 Package exports and the `argrail` executable use this output, not source files.
-Run the build again after changing framework or tooling sources, and before tests.
+Run the build again after changing framework or tooling sources. `bun run test`
+builds the packages before running tests, so integration tests use current output.
 
 For another project:
 
@@ -37,7 +38,7 @@ Use `argrail check` for a one-shot check and `argrail build` to check and bundle
 ## Checks
 
 ```sh
-bun test
+bun run verify
 bun run check
 bun run check:demo
 bun run lint
@@ -52,8 +53,11 @@ and `deslop/no-duplicate-types` with default options as an error.
 The safety-comment rule is temporarily disabled. Local exceptions document
 runtime boundary validation that must remain available to JavaScript callers.
 
-`bun run check` checks library code and type tests. Run `bun run check:lib`
-or `bun run test:types` to check each separately. Type tests live in
+`bun run verify` runs typechecking, builds the packages, and runs the runtime tests.
+The build needs network access to sync the harness registry.
+`bun run check` checks library code, scripts, runtime tests, and type tests.
+Run `bun run check:lib` to check library code, scripts, and runtime tests, or
+`bun run test:types` for type tests only. Type tests live in
 `packages/core/tests/*.test-d.ts` and are compiled, not run. Use
 `expectTypeOf(...).toEqualTypeOf<...>()` for exact inferred types and
 `@ts-expect-error` for API calls that must fail to compile.

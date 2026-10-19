@@ -12,24 +12,25 @@ test('resolves runtime environment overrides and deduplicates shared roots', () 
     { home, environment: {} },
   )
   expect(shared).toHaveLength(1)
-  expect(shared[0].root).toBe(resolve(project, '.agents/skills'))
-  expect(shared[0].harnesses).toEqual(['codex', 'cursor'])
-  expect(shared[0].shared).toContain('opencode')
+  expect(shared[0]?.root).toBe(resolve(project, '.agents/skills'))
+  expect(shared[0]?.harnesses).toEqual(['codex', 'cursor'])
+  expect(shared[0]?.shared).toContain('opencode')
   expect(
     resolveTargets(
       { scope: 'global', harnesses: ['opencode'] },
       { home, environment: { XDG_CONFIG_HOME: resolve('custom-config') } },
-    )[0].root,
+    )[0]?.root,
   ).toBe(resolve('custom-config/opencode/skills'))
   expect(
     resolveTargets(
       { scope: 'global', harnesses: ['claude-code'] },
       { home, environment: { CLAUDE_CONFIG_DIR: resolve('custom-claude') } },
-    )[0].root,
+    )[0]?.root,
   ).toBe(resolve('custom-claude/skills'))
   expect(() =>
     resolveTargets({ scope: 'global', harnesses: ['eve'] }, { home, environment: {} }),
   ).toThrow('not supported')
+  // @ts-expect-error Verify runtime rejection of conflicting JavaScript target settings.
   expect(() => resolveTargets({ path: 'skills', harnesses: ['codex'] })).toThrow('conflicts')
 })
 
@@ -50,7 +51,7 @@ test('deduplicates harness directories reached through a symlink or Windows junc
       { home: root, environment: {} },
     )
     expect(targets).toHaveLength(1)
-    expect(targets[0].harnesses).toEqual(['claude-code', 'codex'])
+    expect(targets[0]?.harnesses).toEqual(['claude-code', 'codex'])
   } finally {
     await rm(root, { recursive: true, force: true })
   }

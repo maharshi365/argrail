@@ -27,6 +27,7 @@ test('collection defaults and invalid elements use normal validation', async () 
   expect((await cli.test({ argv: ['add'] })).value).toEqual({ args: { names: [] }, options: { harness: [], scalar: undefined } })
   expect((await cli.test({ argv: ['add', 'bad'] })).stderr).toContain('expected an integer')
   expect((await cli.test({ argv: ['add', '--scalar', 'a', '--scalar', 'b'] })).stderr).toContain('supplied more than once')
+  // @ts-expect-error Verify runtime validation of invalid collection elements.
   await expect(cli.invoke('/add', { options: { harness: [3] } })).rejects.toThrow('expected text')
   expect(() => defineCommand({ args: [variadicArgument('names', string()), argument('after', string(), { required: false })] })).toThrow('variadic argument must be last')
 })

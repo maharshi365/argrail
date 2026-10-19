@@ -9,11 +9,13 @@ import {
   CLIError,
   integer,
   option,
+  type GroupContext,
 } from '../index.ts'
 
 function fixture() {
-  let user = null
-  const calls = []
+  type User = { id: string; admin: boolean }
+  let user: User | null = null
+  const calls: string[] = []
   const logging = createMiddleware().handler(async ({ next }) => {
     calls.push('before')
     try {
@@ -31,7 +33,7 @@ function fixture() {
   const protectedGroup = defineGroup({ middleware: [auth] })
   const admin = defineGroup({
     middleware: [
-      createMiddleware().handler(({ ctx, next }) => {
+      createMiddleware.withContext<GroupContext<[typeof protectedGroup]>>().handler(({ ctx, next }) => {
         calls.push('admin')
         if (!ctx.services.user.admin) throw new CLIError('FORBIDDEN', 'Admin required')
         return next()
@@ -50,7 +52,7 @@ function fixture() {
   )
   const deploy = bindCommand(
     '/deploy',
-    defineCommand({
+    defineCommand.withContext<GroupContext<[typeof root, typeof protectedGroup]>>()({
       options: { count: option(integer({ min: 1 }), { default: 1 }) },
       run: ({ ctx }) => {
         calls.push('deploy')
@@ -76,7 +78,7 @@ function fixture() {
   return {
     cli,
     calls,
-    authenticate: value => {
+    authenticate: (value: User) => {
       user = value
     },
   }
@@ -153,7 +155,7 @@ test('middleware on a route applies to that route and descendants, not siblings'
     '/users',
     defineCommand({ middleware: [guard], run: ({ ctx }) => ctx.services.user }),
   )
-  const child = bindCommand('/users/create', defineCommand({ run: ({ ctx }) => ctx.services.user }))
+  const child = bindCommand('/users/create', defineCommand.withContext<{ user: string }>()({ run: ({ ctx }) => ctx.services.user }))
   const sibling = bindCommand(
     '/login',
     defineCommand({ run: ({ ctx }) => Object.keys(ctx.services) }),
@@ -187,7 +189,7 @@ test('command middleware extends invocation services without leaking between cal
   let sequence = 0
   const command = bindCommand(
     '/run',
-    defineCommand({
+    defineCommand.withContext<{ prefix: string }>()({
       middleware: [createMiddleware().handler(({ next }) => next({ context: { id: ++sequence } }))],
       run: ({ ctx }) => ({ id: ctx.services.id, prefix: ctx.services.prefix }),
     }),
@@ -311,6 +313,7 @@ test('rejects malformed middleware results even after next executes', async () =
       '/run',
       defineCommand({
         middleware: [
+          // @ts-expect-error Verify runtime rejection of malformed middleware results.
           createMiddleware().handler(async ({ next }) => {
             await next()
             return result

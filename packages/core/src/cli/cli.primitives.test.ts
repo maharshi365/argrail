@@ -57,12 +57,12 @@ test('non-interactive selection fails instead of waiting for input', async () =>
 })
 
 test('validates decoded values without parsing them a second time', async () => {
-  const identifier = value('identifier', {
+  const identifier = value<{ id: string }>('identifier', {
     parse: text => ({ id: text }),
     validate: input => {
       // oxlint-disable-next-line deslop/no-runtime-typeof -- Exercise validation of the custom decoder's output.
-      if (!input || typeof input.id !== 'string') throw new CLIError('INVALID_ID', 'Invalid identifier')
-      return input
+      if (typeof input !== 'object' || input === null || !('id' in input) || typeof input.id !== 'string') throw new CLIError('INVALID_ID', 'Invalid identifier')
+      return { id: input.id }
     },
   })
   const command = bindCommand('/records/$id', defineCommand({ params: { id: positional(identifier) }, run: ({ params }) => params.id }))
@@ -148,6 +148,7 @@ test('cancellation is distinct and prevents starting a handler', async () => {
 test('rejects invalid trailing argument order and duplicate parameter names', () => {
   expect(() => defineCommand({ args: [argument('first', string(), { required: false }), argument('second', string())], run: () => {} })).toThrow('required argument')
   expect(() => bindCommand('/$id', defineCommand({ params: { id: positional(string()) }, args: [argument('id', string())], run: () => {} }))).toThrow('duplicate argument')
+  // @ts-expect-error Verify runtime rejection of a flag used as a positional argument.
   expect(() => defineCommand({ args: [{ ...flag(), name: 'force' }], run: () => {} })).toThrow('trailing arguments must be positional')
 })
 
@@ -156,6 +157,7 @@ test('rejects invalid JavaScript invocation inputs before starting the handler',
   const command = bindCommand('/run', defineCommand({ run: () => { called = true } }))
   const cli = createCLI({ '/run': command }, { name: 'app' })
   for (const input of [null, 'text', [], { params: null }, { options: [] }, { args: 'text' }]) {
+    // @ts-expect-error Verify runtime rejection of malformed JavaScript invocation inputs.
     await expect(cli.invoke('/run', input)).rejects.toThrow()
   }
   expect(called).toBe(false)
@@ -163,6 +165,7 @@ test('rejects invalid JavaScript invocation inputs before starting the handler',
 
 test('rejects JSON output that cannot be serialized without writing partial output', async () => {
   for (const value of [undefined, { toJSON: () => undefined }, { toJSON: () => { throw new Error('private-value') } }]) {
+    // @ts-expect-error Verify runtime rejection of non-serializable JavaScript values.
     const command = bindCommand('/json', defineCommand({ run: ({ ctx }) => ctx.io.json(value) }))
     const result = await createCLI({ '/json': command }, { name: 'app' }).test({ argv: ['json'] })
     expect(result.exitCode).toBe(1)
@@ -191,7 +194,7 @@ test('dynamic command help shows sections before a required positional value is 
 
 test('typed application services are initialized only for valid executable commands', async () => {
   let initialized = 0
-  const command = bindCommand('/greet', defineCommand.withContext()({
+  const command = bindCommand('/greet', defineCommand.withContext<{ prefix: string }>()({
     options: { name: option(string(), { required: true }) },
     run: ({ options, ctx }) => `${ctx.services.prefix} ${options.name}`,
   }))
@@ -214,12 +217,13 @@ test('failure rendering errors use a safe fallback rather than exposing exceptio
 
 test('shell parsing validates transformed outputs before executing a handler', async () => {
   let called = false
-  const identifier = value('identifier', {
+  const identifier = value<{ id: string }>('identifier', {
+    // @ts-expect-error Exercise an invalid custom decoder output at runtime.
     parse: () => ({ id: 123 }),
     validate: input => {
       // oxlint-disable-next-line deslop/no-runtime-typeof -- Reject the intentionally invalid custom decoder output.
-      if (typeof input.id !== 'string') throw new CLIError('INVALID_ID', 'Invalid identifier')
-      return input
+      if (typeof input !== 'object' || input === null || !('id' in input) || typeof input.id !== 'string') throw new CLIError('INVALID_ID', 'Invalid identifier')
+      return { id: input.id }
     },
   })
   const command = bindCommand('/$id', defineCommand({ params: { id: positional(identifier) }, run: () => { called = true } }))

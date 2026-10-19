@@ -17,6 +17,5 @@
       "@argrail/skills/build": ["./packages/skills/src/bundle.ts"]
     }
   },
-  "include": ["packages/*/src/**/*.ts", "scripts/**/*.ts"],
-  "exclude": ["**/*.test.ts"]
+  "include": ["packages/*/src/**/*.ts", "scripts/**/*.ts"]
 }

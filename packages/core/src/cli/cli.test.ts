@@ -54,7 +54,7 @@ describe('CLI input contract', () => {
   test('rejects duplicate options and flag values', async () => {
     expect((await fixture().execute(['deploy', '-r', '2', '--replicas=3'])).stderr).toContain('more than once')
     expect((await fixture().execute(['deploy', '--dry-run=true'])).stderr).toContain('does not accept a value')
-    expect((await fixture().execute(['deploy', '--no-dry-run'])).value.dryRun).toBe(false)
+    expect((await fixture().execute(['deploy', '--no-dry-run'])).value).toMatchObject({ dryRun: false })
   })
   test('honors the option terminator and validates negative integers', async () => {
     expect((await fixture().execute(['users', '-1', 'delete'])).stderr).toContain('must be at least 1')
@@ -65,7 +65,9 @@ describe('CLI input contract', () => {
     const cli = fixture()
     expect(await cli.invoke('/users/$userId/delete', { params: { userId: 42 } })).toEqual({ userId: 42, force: false })
     await expect(cli.invoke('/deploy', { options: { replicas: 0 } })).rejects.toThrow('must be at least 1')
+    // @ts-expect-error Verify runtime rejection of unknown options from JavaScript.
     await expect(cli.invoke('/deploy', { options: { extra: true } })).rejects.toThrow('unknown option')
+    // @ts-expect-error Verify runtime rejection of unknown paths from JavaScript.
     await expect(cli.invoke('/unknown', {})).rejects.toThrow('unknown command')
   })
   test('rejects malformed programmatic argument objects', async () => {
@@ -116,6 +118,7 @@ describe('framework-owned help and output', () => {
 
 describe('definition validation', () => {
   test('rejects mismatched positional definitions and reserved options', () => {
+    // @ts-expect-error Verify runtime rejection of missing positional definitions.
     expect(() => createFileCommand('/$id')({ run: () => {} })).toThrow('positional definitions')
     expect(() => createFileCommand('/run')({ options: { help: flag() }, run: () => {} })).toThrow('reserved option')
     expect(() => createFileCommand('/run')({ options: { foo: flag({ short: 'h' }) }, run: () => {} })).toThrow('reserved option')
@@ -126,12 +129,12 @@ describe('definition validation', () => {
     expect(() => createCLI({ '/$a': a, '/$b': b }, { name: 'app' })).toThrow('ambiguous')
   })
   test('custom value decoders retain runtime validation', async () => {
-    const id = value('ID', {
+    const id = value<{ id: string }>('ID', {
       parse: input => ({ id: input }),
       validate: input => {
         // oxlint-disable-next-line deslop/no-runtime-typeof -- Exercise custom decoder validation before accessing string methods.
-        if (!input || typeof input.id !== 'string' || !input.id.startsWith('u_')) throw new ValidationError('expected u_ prefix')
-        return input
+        if (typeof input !== 'object' || input === null || !('id' in input) || typeof input.id !== 'string' || !input.id.startsWith('u_')) throw new ValidationError('expected u_ prefix')
+        return { id: input.id }
       },
     })
     const command = createFileCommand('/$id')({ params: { id: positional(id) }, run: ({ params }) => params.id })

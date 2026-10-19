@@ -296,16 +296,19 @@ function build<P extends string | undefined>(path: P, config: RuntimeConfig): An
 
 type Field<Name extends string, Value> =
   {} extends Value ? { [K in Name]?: Value } : { [K in Name]: Value }
+type ArgumentField<Name extends string, A extends Arguments> = RequiredKeys<A> extends never
+  ? { [K in Name]?: Input<A> }
+  : { [K in Name]: Input<A> }
 type SchemaField<Name extends string, S, A extends Arguments> = S extends ObjectSchema
   ? Field<Name, SchemaInput<S>>
-  : Field<Name, Input<A>>
+  : ArgumentField<Name, A>
 export type CommandInput<C extends AnyDefinition> = SchemaField<
   'params',
   C['validateParams'],
   C['params']
 > &
   SchemaField<'options', C['validateOptions'], C['options']> &
-  Field<'args', Input<ArgumentMap<C['args']>>>
+  ArgumentField<'args', ArgumentMap<C['args']>>
 export type CommandResult<C extends AnyDefinition> = C['run'] extends (...args: any[]) => infer R
   ? Awaited<R>
   : never

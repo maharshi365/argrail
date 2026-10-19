@@ -5,13 +5,12 @@ import { createIO } from './io.ts'
 import { streamInput, CancelledError } from '../index.ts'
 
 function fixture(terminal = true) {
-  const stream = new PassThrough()
-  const messages = []
-  Object.assign(stream, {
+  const messages: string[] = []
+  const stream = Object.assign(new PassThrough(), {
     isTTY: terminal, isRaw: false,
-    setRawMode(raw) { this.isRaw = raw },
+    setRawMode(raw: boolean) { this.isRaw = raw },
   })
-  const output = { write(text) { messages.push(text) } }
+  const output = { write(text: string) { messages.push(text) } }
   const controller = new AbortController()
   const io = createIO({ stdin: streamInput(stream, output), stderr: output, stdout: { write() {} }, interactive: terminal })
   return { stream, messages, controller, input: createInput(io, controller.signal) }

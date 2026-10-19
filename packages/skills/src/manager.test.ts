@@ -4,6 +4,7 @@ import { resolve } from 'node:path'
 import { tmpdir } from 'node:os'
 import { createSkills } from './index.ts'
 import { hashFiles } from './files.ts'
+import type { SkillPlan, SkillFile } from './types.ts'
 
 function bundle(id = '@test/cli', text = 'original') {
   const files = [
@@ -34,7 +35,7 @@ function bundle(id = '@test/cli', text = 'original') {
     groups: {},
   }
 }
-async function fixture(run) {
+async function fixture(run: (root: string) => Promise<void>) {
   const root = await mkdtemp(
     resolve(process.env.TEMP ? resolve(process.env.TEMP, 'opencode') : tmpdir(), 'argrail-skills-'),
   )
@@ -44,9 +45,9 @@ async function fixture(run) {
     await rm(root, { recursive: true, force: true })
   }
 }
-const request = (root, action = 'add') => ({
+const request = (root: string, action: SkillPlan['action'] = 'add') => ({
   action,
-  skills: ['test-skill'],
+  skills: ['test-skill'] as const,
   target: { path: resolve(root, 'skills') },
 })
 
@@ -62,6 +63,7 @@ test('rejects malformed JavaScript bundle inputs', () => {
       skills: { 'test-skill': { ...bundle().skills['test-skill'], load: 'invalid' } },
     },
   ])
+    // @ts-expect-error Exercise malformed JavaScript bundles at the runtime boundary.
     expect(() => createSkills(input)).toThrow(/Invalid skill bundle|Invalid bundled skill/)
 })
 
@@ -76,6 +78,7 @@ test('rejects invalid skill groups at bundle creation', () => {
     { description: 'Starter', skills: ['missing'] },
     { description: 'Starter', skills: ['test-skill', 'test-skill'] },
   ])
+    // @ts-expect-error Exercise invalid group contracts from JavaScript callers.
     expect(() => createSkills({ ...bundle(), groups: { starter: group } })).toThrow(
       'Invalid bundled skill group: starter',
     )
@@ -96,6 +99,7 @@ test('rejects malformed loaded files before replacing installed content', () =>
     await writeFile(installed, 'keep')
     for (const file of [null, undefined, 1, 'text', {}]) {
       const data = bundle()
+      // @ts-expect-error The loader deliberately returns malformed file data.
       data.skills['test-skill'].load = async () => [file]
       const manager = createSkills(data)
       await expect(manager.apply(await manager.plan(request(root)))).rejects.toMatchObject({
@@ -112,7 +116,7 @@ test('installs complete resources and preserves executable intent', () =>
     const script = resolve(root, 'skills/test-skill/scripts/check.sh')
     expect(await readFile(script, 'utf8')).toBe('echo ok\n')
     if (process.platform !== 'win32') expect((await stat(script)).mode & 0o111).toBe(0o111)
-    expect((await manager.status({ path: resolve(root, 'skills') })).items[0].status).toBe(
+    expect((await manager.status({ path: resolve(root, 'skills') })).items[0]?.status).toBe(
       'current',
     )
     expect(await readdir(resolve(root, 'skills'))).toEqual(['test-skill'])
@@ -127,7 +131,7 @@ test('another CLI can overwrite and remove the same skill directory without owne
     expect(await readFile(resolve(root, 'skills/test-skill/SKILL.md'), 'utf8')).toContain(
       'replacement',
     )
-    expect((await first.apply(await first.plan(request(root, 'remove')))).items[0].status).toBe(
+    expect((await first.apply(await first.plan(request(root, 'remove')))).items[0]?.status).toBe(
       'removed',
     )
     expect(await readdir(resolve(root, 'skills'))).toEqual([])
@@ -138,7 +142,7 @@ test('status compares files directly and does not repair or write state', () =>
     const manager = createSkills(bundle())
     await manager.apply(await manager.plan(request(root)))
     await writeFile(resolve(root, 'skills/test-skill/extra.txt'), 'user file')
-    expect((await manager.status({ path: resolve(root, 'skills') })).items[0].status).toBe(
+    expect((await manager.status({ path: resolve(root, 'skills') })).items[0]?.status).toBe(
       'different',
     )
     expect(await readFile(resolve(root, 'skills/test-skill/extra.txt'), 'utf8')).toBe('user file')
@@ -148,7 +152,9 @@ test('status compares files directly and does not repair or write state', () =>
 test('rejects unknown skills, groups, mixed all selections, and empty selections', () =>
   fixture(async root => {
     const manager = createSkills(bundle())
+    // @ts-expect-error Verify runtime rejection of an unknown skill.
     expect(() => manager.select({ skills: ['missing'] })).toThrow('Unknown skill')
+    // @ts-expect-error Verify runtime rejection of an unknown group.
     expect(() => manager.select({ groups: ['missing'] })).toThrow('Unknown skill group')
     expect(() => manager.select({ all: true, skills: ['test-skill'] })).toThrow('--all')
     await expect(
@@ -200,7 +206,7 @@ test('apply snapshots an approved plan before awaiting file loaders', () =>
   fixture(async root => {
     const data = bundle()
     const files = await data.skills['test-skill'].load()
-    let release
+    let release!: (files: SkillFile[]) => void
     data.skills['test-skill'].load = () =>
       new Promise(resolve => {
         release = resolve
@@ -208,10 +214,11 @@ test('apply snapshots an approved plan before awaiting file loaders', () =>
     const manager = createSkills(data)
     const plan = await manager.plan(request(root))
     const applying = manager.apply(plan)
-    plan.items[0].name = '../../escape'
+    // @ts-expect-error Simulate a JavaScript caller mutating an approved plan.
+    plan.items[0]!.name = '../../escape'
     release(files)
     const result = await applying
-    expect(result.items[0].name).toBe('test-skill')
+    expect(result.items[0]?.name).toBe('test-skill')
     expect(await readFile(resolve(root, 'skills/test-skill/scripts/check.sh'), 'utf8')).toBe(
       'echo ok\n',
     )
@@ -221,13 +228,13 @@ test('apply snapshots an approved plan before awaiting file loaders', () =>
 test('missing updates, absent removals, and status do not create harness directories', () =>
   fixture(async root => {
     const manager = createSkills(bundle())
-    expect((await manager.apply(await manager.plan(request(root, 'update')))).items[0].status).toBe(
+    expect((await manager.apply(await manager.plan(request(root, 'update')))).items[0]?.status).toBe(
       'missing',
     )
-    expect((await manager.apply(await manager.plan(request(root, 'remove')))).items[0].status).toBe(
+    expect((await manager.apply(await manager.plan(request(root, 'remove')))).items[0]?.status).toBe(
       'unchanged',
     )
-    expect((await manager.status({ path: resolve(root, 'skills') })).items[0].status).toBe(
+    expect((await manager.status({ path: resolve(root, 'skills') })).items[0]?.status).toBe(
       'missing',
     )
     expect(await readdir(root)).toEqual([])
@@ -237,7 +244,8 @@ test('changed plans and already applied plans cannot be submitted', () =>
   fixture(async root => {
     const manager = createSkills(bundle())
     const changed = await manager.plan(request(root))
-    changed.items[0].operation = 'remove'
+    // @ts-expect-error Simulate a JavaScript caller tampering with a plan.
+    changed.items[0]!.operation = 'remove'
     await expect(manager.apply(changed)).rejects.toThrow('changed')
     expect(await readdir(root)).toEqual([])
     const plan = await manager.plan(request(root))
@@ -256,11 +264,11 @@ test('skill directory links cannot overwrite or remove files outside the target'
       resolve(root, 'skills/test-skill'),
       process.platform === 'win32' ? 'junction' : 'dir',
     )
-    for (const action of ['add', 'remove']) {
+    for (const action of ['add', 'remove'] as const) {
       const result = await manager.apply(await manager.plan(request(root, action)))
-      expect(result.items[0].status).toBe('blocked')
+      expect(result.items[0]?.status).toBe('blocked')
     }
-    expect((await manager.status({ path: resolve(root, 'skills') })).items[0].status).toBe('unsafe')
+    expect((await manager.status({ path: resolve(root, 'skills') })).items[0]?.status).toBe('unsafe')
     expect(await readFile(resolve(root, 'outside/SKILL.md'), 'utf8')).toBe('keep')
   }))
 
@@ -295,8 +303,8 @@ test('removing a skill from a shared root removes it for every harness', () =>
         target: { project: root, harnesses: ['codex'] },
       }),
     )
-    expect(removed.items[0].status).toBe('removed')
-    expect((await manager.status({ project: root, harnesses: ['cursor'] })).items[0].status).toBe(
+    expect(removed.items[0]?.status).toBe('removed')
+    expect((await manager.status({ project: root, harnesses: ['cursor'] })).items[0]?.status).toBe(
       'missing',
     )
     expect(await readdir(resolve(root, '.agents/skills'))).toEqual([])
