@@ -3,10 +3,11 @@ import { CLIError, checkSignal } from './errors.ts'
 
 export interface MiddlewareResult<Added = {}> {
   readonly value: unknown
-  readonly context?: Added
+  readonly context: Added
 }
 export interface MiddlewareNext {
-  <Added extends object = {}>(settings?: { context: Added }): Promise<MiddlewareResult<Added>>
+  (): Promise<MiddlewareResult<{}>>
+  <Added extends object>(settings: { context: Added }): Promise<MiddlewareResult<Added>>
 }
 export interface Middleware<Required = {}, Added = {}> {
   readonly handler: (input: {
@@ -17,7 +18,7 @@ export interface Middleware<Required = {}, Added = {}> {
 // Erasure is confined to dispatch. Definitions retain their context requirements and additions.
 export type AnyMiddleware = Middleware<any, any>
 export type MiddlewareList = readonly AnyMiddleware[]
-interface DispatchState { called: boolean; active: boolean; result?: MiddlewareResult }
+interface DispatchState { called: boolean; active: boolean; result: MiddlewareResult | undefined }
 type Added<M> = M extends Middleware<any, infer A> ? A : {}
 type Required<M> = M extends Middleware<infer R, any> ? R : {}
 export type MiddlewareContext<M extends MiddlewareList> = M extends readonly [
@@ -53,8 +54,8 @@ export async function runMiddleware(
   async function dispatch(index: number, current: CommandContext<any>): Promise<MiddlewareResult> {
     checkSignal(current.signal)
     const middleware = middlewares[index]
-    if (!middleware) return { value: await terminal(current) }
-    const state: DispatchState = { called: false, active: true }
+    if (!middleware) return { value: await terminal(current), context: {} }
+    const state: DispatchState = { called: false, active: true, result: undefined }
     const next: MiddlewareNext = async <Added extends object = {}>(settings?: {
       context: Added
     }) => {
@@ -89,7 +90,7 @@ export async function runMiddleware(
         enumerable: true,
       })
       const result = await dispatch(index + 1, downstream)
-      const output = Object.freeze(settings ? { value: result.value, context: settings.context } : { value: result.value })
+      const output = Object.freeze({ value: result.value, context: settings?.context ?? {} })
       state.result = output
       return output
     }

@@ -113,9 +113,9 @@ export interface Argument<T, Required extends boolean = boolean, Kind extends 'p
   readonly hasDefault: boolean
   readonly defaultValue: Input | undefined
   readonly negate: boolean
-  readonly repeated?: boolean
-  readonly variadic?: boolean
-  readonly element?: Value<unknown>
+  readonly repeated: boolean
+  readonly variadic: boolean
+  readonly element: Value<unknown> | undefined
 }
 
 type Settings = { description?: string; short?: string }
@@ -125,6 +125,7 @@ export function positional<T, Input = T>(parser: Value<T, Input>, settings: { de
     kind: 'positional', value: parser, required: true,
     description: settings.description ?? '', short: undefined,
     hasDefault: false, defaultValue: undefined, negate: false,
+    repeated: false, variadic: false, element: undefined,
   }
 }
 
@@ -139,6 +140,7 @@ export function option<T, Input = T>(parser: Value<T, Input>, settings: Settings
     kind: 'option', value: parser, required: settings.required ?? false,
     description: settings.description ?? '', short: settings.short,
     hasDefault, defaultValue: hasDefault ? settings.default : undefined, negate: false,
+    repeated: false, variadic: false, element: undefined,
   }
 }
 
@@ -157,6 +159,7 @@ export function flag(settings: Settings & { default?: boolean; negate?: boolean 
     }),
     description: settings.description ?? '', short: settings.short,
     hasDefault: true, defaultValue: settings.default ?? false, negate: settings.negate ?? true,
+    repeated: false, variadic: false, element: undefined,
   }
 }
 

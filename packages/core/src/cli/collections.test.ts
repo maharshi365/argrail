@@ -1,5 +1,14 @@
 import { test, expect } from 'bun:test'
-import { createCLI, defineCommand, bindCommand, composeRegistries, argument, integer, string, option, repeatableOption, variadicArgument } from '../index.ts'
+import { createCLI, defineCommand, bindCommand, composeRegistries, argument, integer, string, option, positional, flag, repeatableOption, variadicArgument } from '../index.ts'
+
+test('argument factories normalize collection metadata for scalar and collection descriptors', () => {
+  const parser = string()
+  for (const descriptor of [positional(parser), argument('name', parser), option(parser), flag()]) {
+    expect(descriptor).toMatchObject({ repeated: false, variadic: false, element: undefined })
+  }
+  expect(repeatableOption(parser)).toMatchObject({ repeated: true, variadic: false, element: parser })
+  expect(variadicArgument('names', parser)).toMatchObject({ repeated: false, variadic: true, element: parser })
+})
 
 test('decodes repeated aliases and trailing values without consuming command words', async () => {
   const command = bindCommand('/skills/add', defineCommand({

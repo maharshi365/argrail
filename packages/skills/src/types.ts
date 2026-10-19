@@ -9,8 +9,8 @@ export interface BundledSkill {
   readonly name: string
   readonly description: string
   readonly hash: string
-  readonly fileCount?: number
-  readonly bytes?: number
+  readonly fileCount: number
+  readonly bytes: number
   readonly load: () => Promise<readonly SkillFile[]>
 }
 export interface SkillBundle {
@@ -83,7 +83,7 @@ export type SkillResult = {
       | 'blocked'
       | 'missing'
       | 'failed'
-    readonly reason?: string
+    readonly reason: string
   }[]
 }
 export interface HarnessSettings {
@@ -183,6 +183,6 @@ export interface Harness {
   projectPath: string
   globalPath: string | undefined
   detected: boolean
-  disabled?: string
+  disabled: string | undefined
 }
 export interface HarnessRoot { root: string; harnesses: string[]; shared: string[] }

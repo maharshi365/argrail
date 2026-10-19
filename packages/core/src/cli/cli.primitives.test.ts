@@ -16,6 +16,16 @@ test('captures explicit output and keeps handler results separate', async () => 
   expect(result.value).toEqual({ count: 2 })
 })
 
+test('execution results retain the value field for void commands, help, and failures', async () => {
+  const command = bindCommand('/run', defineCommand({ run: () => {} }))
+  const cli = createCLI({ '/run': command }, { name: 'app' })
+  for (const argv of [['run'], ['--help'], ['missing']]) {
+    const result = await cli.execute(argv)
+    expect(Object.hasOwn(result, 'value')).toBe(true)
+    expect(result.value).toBeUndefined()
+  }
+})
+
 test('reads bounded piped credentials without prompting or exposing them', async () => {
   const command = bindCommand('/credentials', defineCommand({
     run: async ({ ctx }) => {

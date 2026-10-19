@@ -37,6 +37,13 @@ function validateBundle(input: unknown): asserts input is SkillBundle {
       name.length > 64 ||
       !isRecord(skill) ||
       skill.name !== name ||
+      typeof skill.description !== 'string' ||
+      typeof skill.fileCount !== 'number' ||
+      !Number.isSafeInteger(skill.fileCount) ||
+      skill.fileCount < 0 ||
+      typeof skill.bytes !== 'number' ||
+      !Number.isSafeInteger(skill.bytes) ||
+      skill.bytes < 0 ||
       typeof skill.load !== 'function' ||
       typeof skill.hash !== 'string' ||
       !/^[a-f0-9]{64}$/.test(skill.hash)
@@ -136,8 +143,8 @@ export function createSkills(
           operation,
           reason,
           exists: state.exists,
-          fileCount: skill.fileCount ?? 0,
-          bytes: skill.bytes ?? 0,
+          fileCount: skill.fileCount,
+          bytes: skill.bytes,
         })
       }
     const result = {
@@ -219,11 +226,11 @@ export function createSkills(
                 mode: file.executable ? 0o755 : 0o644,
               })
             }
-            results.push({ ...result, status: 'installed' })
+            results.push({ ...result, status: 'installed', reason: '' })
           } else if (item.operation === 'remove') {
             await rm(item.path, { recursive: true, force: true })
-            results.push({ ...result, status: 'removed' })
-          } else results.push({ ...result, status: 'unchanged' })
+            results.push({ ...result, status: 'removed', reason: '' })
+          } else results.push({ ...result, status: 'unchanged', reason: '' })
         } catch (error) {
           checkSignal(signal)
           const code = error instanceof Error && 'code' in error ? error.code : undefined

@@ -47,7 +47,7 @@ export interface RunResult {
   exitCode: number
   stdout: string
   stderr: string
-  value?: unknown
+  value: unknown
 }
 
 interface Tokens {
@@ -397,9 +397,7 @@ export function createCLI<const R extends Registry>(registry: R & { [P in keyof 
     })
     const signal = execution.signal ?? new AbortController().signal
     function result<T>(exitCode: number, value?: T): RunResult {
-      const output: RunResult = { exitCode, stdout, stderr }
-      if (value !== undefined) output.value = value
-      return output
+      return { exitCode, stdout, stderr, value }
     }
     function showHelp(path = '/') {
       const text = help(path)

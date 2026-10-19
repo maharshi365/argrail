@@ -58,8 +58,8 @@ export function listHarnesses({
       projectPath: evaluate(harness.project, home, environment)!,
       globalPath: global,
       detected: harness.id !== 'universal' && !!global && existsSync(dirname(global)),
+      disabled: scope === 'global' && !global ? 'Global skills are not supported' : undefined,
     }
-    if (scope === 'global' && !global) result.disabled = 'Global skills are not supported'
     return result
   })
 }

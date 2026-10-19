@@ -185,6 +185,27 @@ test('middleware keeps framework exitCode shared with the execution result', asy
   expect(result.value).toBe('u1')
 })
 
+test('next results always include the context supplied by that middleware', async () => {
+  const contexts: unknown[] = []
+  const command = bindCommand('/run', defineCommand({
+    middleware: [
+      createMiddleware().handler(async ({ next }) => {
+        const result = await next()
+        contexts.push(result.context)
+        return result
+      }),
+      createMiddleware().handler(async ({ next }) => {
+        const result = await next({ context: { user: 'u1' } })
+        contexts.push(result.context)
+        return result
+      }),
+    ],
+    run: ({ ctx }) => ctx.services.user,
+  }))
+  expect(await createCLI({ '/run': command }, { name: 'app' }).invoke('/run', {})).toBe('u1')
+  expect(contexts).toEqual([{ user: 'u1' }, {}])
+})
+
 test('command middleware extends invocation services without leaking between calls', async () => {
   let sequence = 0
   const command = bindCommand(
@@ -294,7 +315,7 @@ test('rejects middleware that silently skips the handler', async () => {
   const command = bindCommand(
     '/run',
     defineCommand({
-      middleware: [createMiddleware().handler(() => ({ value: 'skipped' }))],
+      middleware: [createMiddleware().handler(() => ({ value: 'skipped', context: {} }))],
       run: () => {
         ran = true
       },
@@ -333,7 +354,7 @@ test('rejects middleware that replaces the command result after next executes', 
   const command = bindCommand('/run', defineCommand({
     middleware: [createMiddleware().handler(async ({ next }) => {
       await next()
-      return { value: 'not the numeric command result' }
+      return { value: 'not the numeric command result', context: {} }
     })],
     run: () => 42,
   }))

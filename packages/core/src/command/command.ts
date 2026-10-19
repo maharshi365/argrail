@@ -28,6 +28,8 @@ export interface Command<Path extends string | undefined, Params extends Argumen
   readonly args: Args
   readonly sections: readonly Section[]
   readonly middleware: M
+  readonly validateParams: undefined
+  readonly validateOptions: undefined
   readonly run: (input: { params: Output<Params>; options: Output<Options>; args: Output<ArgumentMap<Args>>; ctx: CommandContext<Services & MiddlewareContext<M>> }) => Result
 }
 
@@ -41,8 +43,8 @@ export interface AnyDefinition {
   readonly sections: readonly Section[]
   readonly middleware: MiddlewareList
   readonly run: ((input: any) => any) | undefined
-  readonly validateParams?: ObjectSchema | undefined
-  readonly validateOptions?: ObjectSchema | undefined
+  readonly validateParams: ObjectSchema | undefined
+  readonly validateOptions: ObjectSchema | undefined
   readonly groups?: readonly Group[]
 }
 export type AnyCommand = AnyDefinition & { readonly path: string }
@@ -150,7 +152,7 @@ type SchemaCommand<
     Services,
     M
   >,
-  'run'
+  'run' | 'validateParams' | 'validateOptions'
 > & {
   readonly validateParams: PS
   readonly validateOptions: OS

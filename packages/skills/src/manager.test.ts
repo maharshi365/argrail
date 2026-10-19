@@ -29,6 +29,8 @@ function bundle(id = '@test/cli', text = 'original') {
         name: 'test-skill',
         description: 'Test',
         hash: hashFiles(files),
+        fileCount: files.length,
+        bytes: files.reduce((total, file) => total + Buffer.from(file.data, 'base64').length, 0),
         load: async () => files,
       },
     },
@@ -62,6 +64,10 @@ test('rejects malformed JavaScript bundle inputs', () => {
       ...bundle(),
       skills: { 'test-skill': { ...bundle().skills['test-skill'], load: 'invalid' } },
     },
+    {
+      ...bundle(),
+      skills: { 'test-skill': { ...bundle().skills['test-skill'], description: undefined } },
+    },
   ])
     // @ts-expect-error Exercise malformed JavaScript bundles at the runtime boundary.
     expect(() => createSkills(input)).toThrow(/Invalid skill bundle|Invalid bundled skill/)
@@ -83,6 +89,28 @@ test('rejects invalid skill groups at bundle creation', () => {
       'Invalid bundled skill group: starter',
     )
 })
+
+test('rejects missing or invalid bundled skill counts', () => {
+  for (const field of ['fileCount', 'bytes'] as const) {
+    for (const count of [undefined, null, '1', -1, 1.5, Infinity, NaN, Number.MAX_SAFE_INTEGER + 1]) {
+      const data = bundle()
+      Object.assign(data.skills['test-skill'], { [field]: count })
+      expect(() => createSkills(data)).toThrow('Invalid bundled skill: test-skill')
+    }
+    const data = bundle()
+    Reflect.deleteProperty(data.skills['test-skill'], field)
+    expect(() => createSkills(data)).toThrow('Invalid bundled skill: test-skill')
+  }
+})
+
+test('plans report bundled file and byte counts without loading resources', () =>
+  fixture(async root => {
+    const data = bundle()
+    const skill = data.skills['test-skill']
+    skill.load = async () => { throw new Error('planning must not load resources') }
+    const plan = await createSkills(data).plan(request(root))
+    expect(plan.items[0]).toMatchObject({ fileCount: skill.fileCount, bytes: skill.bytes })
+  }))
 
 test('selects and deduplicates valid group members', () => {
   const manager = createSkills({
@@ -112,7 +140,9 @@ test('rejects malformed loaded files before replacing installed content', () =>
 test('installs complete resources and preserves executable intent', () =>
   fixture(async root => {
     const manager = createSkills(bundle())
-    expect((await manager.apply(await manager.plan(request(root)))).exitCode).toBe(0)
+    const result = await manager.apply(await manager.plan(request(root)))
+    expect(result.exitCode).toBe(0)
+    expect(result.items[0]).toMatchObject({ status: 'installed', reason: '' })
     const script = resolve(root, 'skills/test-skill/scripts/check.sh')
     expect(await readFile(script, 'utf8')).toBe('echo ok\n')
     if (process.platform !== 'win32') expect((await stat(script)).mode & 0o111).toBe(0o111)
@@ -228,12 +258,12 @@ test('apply snapshots an approved plan before awaiting file loaders', () =>
 test('missing updates, absent removals, and status do not create harness directories', () =>
   fixture(async root => {
     const manager = createSkills(bundle())
-    expect((await manager.apply(await manager.plan(request(root, 'update')))).items[0]?.status).toBe(
-      'missing',
-    )
-    expect((await manager.apply(await manager.plan(request(root, 'remove')))).items[0]?.status).toBe(
-      'unchanged',
-    )
+    expect((await manager.apply(await manager.plan(request(root, 'update')))).items[0]).toMatchObject({
+      status: 'missing', reason: 'Not installed; use skills add',
+    })
+    expect((await manager.apply(await manager.plan(request(root, 'remove')))).items[0]).toMatchObject({
+      status: 'unchanged', reason: '',
+    })
     expect((await manager.status({ path: resolve(root, 'skills') })).items[0]?.status).toBe(
       'missing',
     )

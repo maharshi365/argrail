@@ -33,6 +33,8 @@ async function fixture(run: (fixture: {
         name: 'test-skill',
         description: 'Example',
         hash: hashFiles(files),
+        fileCount: files.length,
+        bytes: files.reduce((total, file) => total + Buffer.from(file.data, 'base64').length, 0),
         load: async () => {
           loads++
           return files
