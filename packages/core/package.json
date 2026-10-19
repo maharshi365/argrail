@@ -1,6 +1,9 @@
 {
   "name": "@argrail/core",
-  "version": "0.1.0",
+  "version": "0.0.1",
+  "description": "A type-safe, file-based framework for command-line apps.",
+  "license": "MIT",
+  "publishConfig": { "access": "public" },
   "type": "module",
   "exports": { ".": { "types": "./dist/index.d.ts", "default": "./dist/index.js" } },
   "files": ["dist"]

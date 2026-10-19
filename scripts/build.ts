@@ -19,6 +19,9 @@ export async function build() {
     await rm(destination, { recursive: true, force: true })
     await mkdir(destination, { recursive: true })
     await cp(resolve(root, '.argrail/build/packages', name, 'src'), destination, { recursive: true })
+    for (const file of ['LICENSE', 'README.md']) {
+      await cp(resolve(root, file), resolve(root, 'packages', name, file))
+    }
   }
 }
 

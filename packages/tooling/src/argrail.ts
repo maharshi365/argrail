@@ -1,21 +1,21 @@
-#!/usr/bin/env bun
+#!/usr/bin/env node
 import { spawn } from 'node:child_process'
-import { mkdir, chmod, readFile } from 'node:fs/promises'
-import { resolve } from 'node:path'
+import { mkdir, chmod } from 'node:fs/promises'
+import { relative, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createRequire } from 'node:module'
-import { loadConfig, generate, directorySnapshot, skillsSnapshot, addCommand, type ProjectConfig } from './generator.ts'
+import { watch } from 'chokidar'
+import { build } from 'esbuild'
+import { loadConfig, generate, addCommand, type ProjectConfig } from './generator.ts'
 
 const require = createRequire(import.meta.url)
 const args = process.argv.slice(2)
 const requested = args.shift() ?? 'help'
 const action = requested === '--help' || requested === '-h' ? 'help' : requested
 let project = '.'
-let compile = false
 let commandPath
 for (let index = 0; index < args.length; index++) {
   if (args[index] === '--project' && args[index + 1]) project = args[++index]!
-  else if (args[index] === '--compile') compile = true
   else if (action === 'add' && commandPath === undefined && !args[index]!.startsWith('-')) commandPath = args[index]
   else if (args[index] === '--help' || args[index] === '-h') { showHelp(); process.exit(0) }
   else { console.error(`Error: unknown or incomplete option ${args[index]}`); process.exit(2) }
@@ -34,14 +34,13 @@ Commands:
 
 Options:
   --project <directory>  Project containing argrail.config.json. Default: .
-  --compile              Build a native executable (build only).
   -h, --help             Show help.`)
 }
 
 function compiler(watch = false): [string, string[]] {
   let bin
   try { bin = require.resolve('typescript/bin/tsc') }
-  catch { throw new Error('TypeScript is required for checks. Install it with: bun add -d typescript') }
+  catch { throw new Error('TypeScript is required for checks. Install it with: npm install -D typescript') }
   return [process.execPath, [bin, '-p', '.argrail/tsconfig.json', '--pretty', 'false', ...(watch ? ['--watch', '--preserveWatchOutput'] : [])]]
 }
 
@@ -56,46 +55,82 @@ function run(command: string, argv: string[], cwd: string) {
 async function dev(config: ProjectConfig) {
   let lastError: string | undefined
   compiler() // Fail early with the same actionable error as one-shot checks.
-  const checker = spawn(process.execPath, [fileURLToPath(new URL(import.meta.url.endsWith('.ts') ? './checker.ts' : './checker.js', import.meta.url)), resolve(config.root, '.argrail/tsconfig.json')], {
-    cwd: config.root, stdio: ['pipe', 'inherit', 'inherit'],
+  function inside(directory: string, file: string) {
+    return file === directory || file.startsWith(directory + sep)
+  }
+  const watcher = watch(config.root, {
+    ignoreInitial: true,
+    ignored: file => {
+      const parts = relative(config.root, file).split(sep)
+      return parts.some(part => ['node_modules', '.git', '.argrail'].includes(part))
+        || inside(config.outDirectory, file)
+        || file === config.generatedRegistry
+    },
   })
-  let snapshot = await directorySnapshot(config.commandsDirectory)
-  let skillSnapshot = await skillsSnapshot(config)
-  let configuration = await readFile(resolve(config.root, 'argrail.config.json'), 'utf8')
   let busy = false
   let stopped = false
-  console.log('Watching command files. Commands are never executed automatically. Press Ctrl+C to stop.')
-  const timer = setInterval(async () => {
+  let pending = false
+  let timer: ReturnType<typeof setTimeout> | undefined
+  async function refresh() {
     if (busy || stopped) return
     busy = true
+    pending = false
     try {
-      const nextConfiguration = await readFile(resolve(config.root, 'argrail.config.json'), 'utf8')
-      const nextConfig = nextConfiguration === configuration ? config : await loadConfig(config.root)
-      const current = await directorySnapshot(nextConfig.commandsDirectory)
-      const currentSkills = await skillsSnapshot(nextConfig)
-      if (current !== snapshot || currentSkills !== skillSnapshot || nextConfiguration !== configuration) {
-        // Generate first: on failure retain the last valid registry and retry next tick.
-        const result = await generate(nextConfig, { scaffold: true })
-        snapshot = current
-        skillSnapshot = currentSkills
-        configuration = nextConfiguration
-        config = nextConfig
-        lastError = undefined
-        console.log(`Generated ${result.count} commands. Type checker will refresh.`)
-      }
+      const nextConfig = await loadConfig(config.root)
+      // Retain the last valid configuration and registry on failure.
+      const result = await generate(nextConfig, { scaffold: true })
+      config = nextConfig
+      lastError = undefined
+      console.log(`Generated ${result.count} commands. Type checker will refresh.`)
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       if (message !== lastError) console.error(`Error: ${message}`)
       lastError = message
-    } finally { busy = false }
-  }, 250)
+    } finally {
+      busy = false
+      // oxlint-disable-next-line typescript/no-unnecessary-condition -- Watch events and shutdown can change these flags during awaited generation.
+      if (pending && !stopped) schedule()
+    }
+  }
+  function schedule() {
+    pending = true
+    clearTimeout(timer)
+    timer = setTimeout(() => { void refresh() }, 100)
+  }
+  watcher.on('all', (_event, file) => {
+    if (stopped) return
+    const commandPath = relative(config.commandsDirectory, file).split(sep)
+    const command = inside(config.commandsDirectory, file)
+      && !commandPath.some(part => part.startsWith('-') || part.startsWith('.') || part === 'node_modules')
+      && file.endsWith('.ts') && !/\.(?:d|test|spec|gen)\.ts$/.test(file)
+    if (command || inside(resolve(config.root, 'skills'), file)
+      || file === resolve(config.root, 'argrail.config.json')
+      || file === resolve(config.root, 'package.json')) schedule()
+  })
+  try {
+    await new Promise<void>((ready, reject) => {
+      watcher.once('ready', ready)
+      watcher.once('error', reject)
+    })
+  } catch (error) {
+    stopped = true
+    clearTimeout(timer)
+    await watcher.close()
+    throw error
+  }
+  const checker = spawn(process.execPath, [fileURLToPath(new URL(import.meta.url.endsWith('.ts') ? './checker.ts' : './checker.js', import.meta.url)), resolve(config.root, '.argrail/tsconfig.json')], {
+    cwd: config.root, stdio: ['pipe', 'inherit', 'inherit'],
+  })
+  console.log('Watching command files. Commands are never executed automatically. Press Ctrl+C to stop.')
   function stop(code: number) {
     if (stopped) return
     stopped = true
-    clearInterval(timer)
+    clearTimeout(timer)
+    void watcher.close()
     checker.stdin.end()
     process.exitCode = code
   }
+  watcher.on('error', error => { console.error(`Error: ${error instanceof Error ? error.message : String(error)}`); stop(1) })
   checker.on('error', error => { console.error(`Error: ${error.message}`); stop(1) })
   checker.on('exit', code => { if (!stopped) stop(code ?? 1) })
   process.once('SIGINT', () => stop(0))
@@ -106,7 +141,6 @@ try {
   if (action === 'help') showHelp()
   else {
     if (!['generate', 'check', 'dev', 'build', 'add'].includes(action)) throw new Error(`Unknown command: ${action}`)
-    if (compile && action !== 'build') throw new Error('--compile is only valid for build')
     const config = await loadConfig(project)
     if (action === 'add') console.log(`Created ${await addCommand(config, commandPath!)}`)
     const generated = await generate(config, { scaffold: action === 'dev' })
@@ -118,14 +152,18 @@ try {
       if (code !== 0) process.exitCode = code
       else if (action === 'build') {
         await mkdir(config.outDirectory, { recursive: true })
-        const outfile = resolve(config.outDirectory, config.settings.name + (compile ? (process.platform === 'win32' ? '.exe' : '') : '.js'))
-        const flags = compile ? ['--compile'] : ['--target=node']
-        const buildCode = await run(process.execPath, ['build', generated.entry, ...flags, '--outfile', outfile], config.root)
-        process.exitCode = buildCode
-        if (!buildCode) {
-          if (process.platform !== 'win32') await chmod(outfile, 0o755)
-          console.log(`Built ${outfile}`)
-        }
+        const outfile = resolve(config.outDirectory, config.settings.name + '.js')
+        await build({
+          absWorkingDir: config.root,
+          entryPoints: [generated.entry],
+          outfile,
+          bundle: true,
+          platform: 'node',
+          format: 'esm',
+          target: 'node22',
+        })
+        if (process.platform !== 'win32') await chmod(outfile, 0o755)
+        console.log(`Built ${outfile}`)
       }
     }
   }

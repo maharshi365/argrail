@@ -2,3 +2,5 @@ node_modules/
 dist/
 .argrail/
 *.gen.ts
+packages/*/LICENSE
+packages/*/README.md

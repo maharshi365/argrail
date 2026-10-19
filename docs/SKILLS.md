@@ -56,7 +56,7 @@ on Windows, tracked Git executable bits are also used when Git is available.
 ## Generation and builds
 
 ```text
-skills/ → src/commandTree.gen.ts → shipped JS bundle / native executable
+skills/ → src/commandTree.gen.ts → shipped JavaScript bundle
                    │
                    ├── commandTree: author + management commands
                    └── skillTree: typed metadata + lazy file loaders
@@ -67,7 +67,7 @@ skills/ → src/commandTree.gen.ts → shipped JS bundle / native executable
 There is no separate public `skillTree.gen.ts` or author-maintained manifest.
 Do not edit generated files. `argrail dev` watches skill contents, including
 binary resources. `argrail check` validates the bundle and group references.
-`argrail build`, including `--compile`, embeds the resources. No source directory
+`argrail build` embeds the resources. No source directory
 is required after shipping. Help and listing do not load resource payloads.
 
 Generation, development, and build never install skills. The management mount

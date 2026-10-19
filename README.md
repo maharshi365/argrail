@@ -183,13 +183,56 @@ the registry, checks projects, and builds the CLI.
 
 Dev mode adds starter code to empty command files. It does not run handlers.
 
-Try the [demo](examples/demo) from this repository:
+### Set up your app
+
+Use Node.js 22.22 or later for development and builds. In your app, create
+`argrail.config.json`:
+
+```json
+{
+  "name": "my-cli",
+  "version": "0.0.1"
+}
+```
+
+Add scripts to your app's `package.json`:
+
+```json
+{
+  "type": "module",
+  "scripts": {
+    "dev": "argrail dev",
+    "build": "argrail build"
+  }
+}
+```
+
+Create a `tsconfig.json` if your app does not have one:
+
+```json
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "strict": true,
+    "noEmit": true,
+    "allowImportingTsExtensions": true
+  },
+  "include": ["src/**/*.ts"]
+}
+```
+
+Put your command files in `src/commands/`, then run `npm run dev`. Argrail
+generates `src/commandTree.gen.ts` and the CLI entry point, watches changes,
+and checks types. No manual generation step is needed, and handlers do not run
+automatically.
+
+Add `.argrail/` and `dist/` to your app's `.gitignore`. To build and run your CLI:
 
 ```sh
-bun install
-bun run build
-bun run build:demo
-bun examples/demo/dist/argrail-demo.js --help
+npm run build
+node dist/my-cli.js --help
 ```
 
 ## Contributing

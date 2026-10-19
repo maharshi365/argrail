@@ -41,7 +41,7 @@ test('builds a CLI that runs without source files or installed framework package
   const project = await setup()
   const isolated = await mkdtemp(resolve(process.env.TEMP ? resolve(process.env.TEMP, 'opencode') : tmpdir(), 'argrail-bundle-'))
   try {
-    const built = await run(process.execPath, [tooling, 'build', '--project', project], root)
+    const built = await run('node', [tooling, 'build', '--project', project], root)
     expect(built.code, built.stdout + built.stderr).toBe(0)
     const content = await readFile(resolve(project, 'dist/fixture.js'), 'utf8')
     await writeFile(resolve(isolated, 'fixture.mjs'), content)
@@ -60,7 +60,7 @@ test('builds a CLI that runs without source files or installed framework package
   }
 }, 30000)
 
-test('bundles skills into JS and native CLIs that install without author source files', async () => {
+test('bundles skills into a JavaScript CLI that installs without author source files', async () => {
   const project = await setup()
   const isolated = await mkdtemp(resolve(process.env.TEMP ? resolve(process.env.TEMP, 'opencode') : tmpdir(), 'argrail-skill-cli-'))
   try {
@@ -73,28 +73,23 @@ export const SkillGroups = { starter: { description: 'Starter skills', skills: [
     await mkdir(resolve(project, 'skills/test-skill/assets'), { recursive: true })
     await writeFile(resolve(project, 'skills/test-skill/SKILL.md'), '---\nname: test-skill\ndescription: Test bundled resources\n---\n')
     await writeFile(resolve(project, 'skills/test-skill/assets/data.bin'), new Uint8Array([0, 255, 42]))
-    for (const native of [false, true]) {
-      const built = await run(process.execPath, [tooling, 'build', '--project', project, ...(native ? ['--compile'] : [])], root)
-      expect(built.code, built.stdout + built.stderr).toBe(0)
-      const filename = native ? 'fixture' + (process.platform === 'win32' ? '.exe' : '') : 'fixture.js'
-      const executable = resolve(isolated, native ? filename : 'fixture.mjs')
-      await writeFile(executable, await readFile(resolve(project, 'dist', filename)), { mode: 0o755 })
-      const command = native ? executable : 'node'
-      const prefix = native ? [] : [executable]
-      const target = resolve(isolated, native ? 'native-skills' : 'js-skills')
-      const installed = await run(command, [...prefix, 'skills', 'add', '--group', 'starter', '--path', target, '--yes', '--json'], isolated)
-      expect(installed.code, installed.stderr + installed.stdout).toBe(0)
-      expect(installed.stderr).toContain('skills middleware')
-      expect(JSON.parse(installed.stdout).bundleId).toBe('@test/fixture')
-      expect(JSON.parse(installed.stdout).items[0].status).toBe('installed')
-      expect(await readFile(resolve(target, 'test-skill/assets/data.bin'))).toEqual(Buffer.from([0, 255, 42]))
-      const status = await run(command, [...prefix, 'skills', 'status', '--path', target, '--json'], isolated)
-      expect(JSON.parse(status.stdout).items[0].status).toBe('current')
-      const help = await run(command, [...prefix, 'help', 'skills', 'add'], isolated)
-      expect(help.stdout).toContain('[names...]')
-      expect(help.stdout).toContain('--harness')
-      expect(help.stderr).not.toContain('skills middleware')
-    }
+    const built = await run('node', [tooling, 'build', '--project', project], root)
+    expect(built.code, built.stdout + built.stderr).toBe(0)
+    const executable = resolve(isolated, 'fixture.mjs')
+    await writeFile(executable, await readFile(resolve(project, 'dist/fixture.js')), { mode: 0o755 })
+    const target = resolve(isolated, 'js-skills')
+    const installed = await run('node', [executable, 'skills', 'add', '--group', 'starter', '--path', target, '--yes', '--json'], isolated)
+    expect(installed.code, installed.stderr + installed.stdout).toBe(0)
+    expect(installed.stderr).toContain('skills middleware')
+    expect(JSON.parse(installed.stdout).bundleId).toBe('@test/fixture')
+    expect(JSON.parse(installed.stdout).items[0].status).toBe('installed')
+    expect(await readFile(resolve(target, 'test-skill/assets/data.bin'))).toEqual(Buffer.from([0, 255, 42]))
+    const status = await run('node', [executable, 'skills', 'status', '--path', target, '--json'], isolated)
+    expect(JSON.parse(status.stdout).items[0].status).toBe('current')
+    const help = await run('node', [executable, 'help', 'skills', 'add'], isolated)
+    expect(help.stdout).toContain('[names...]')
+    expect(help.stdout).toContain('--harness')
+    expect(help.stderr).not.toContain('skills middleware')
   } finally {
     await rm(project, { recursive: true, force: true })
     await rm(isolated, { recursive: true, force: true })
@@ -117,7 +112,7 @@ import { commandTree } from './commandTree.gen.ts'
 const cli = createCLI(commandTree, { name: 'fixture', context: () => ({ prefix: 'data' }) })
 await cli.run()\n`
     await writeFile(resolve(project, 'src/cli.ts'), entry)
-    const built = await run(process.execPath, [tooling, 'build', '--project', project], root)
+    const built = await run('node', [tooling, 'build', '--project', project], root)
     expect(built.code, built.stdout + built.stderr).toBe(0)
     expect(await readFile(resolve(project, 'src/cli.ts'), 'utf8')).toBe(entry)
     const executed = await new Promise<RunResult>((resolveResult, reject) => {
@@ -167,7 +162,7 @@ export const Command = createFileCommand('/login')({ run: ({ ctx }) => {
 import { commandTree } from './commandTree.gen.ts'
 await createCLI(commandTree, { name: 'fixture', context: () => ({ authenticated: ${authenticated} }) }).run()\n`
     await writeFile(resolve(project, 'src/cli.ts'), entry(false))
-    let built = await run(process.execPath, [tooling, 'build', '--project', project], root)
+    let built = await run('node', [tooling, 'build', '--project', project], root)
     expect(built.code, built.stdout + built.stderr).toBe(0)
     const bundle = resolve(project, 'dist/fixture.js')
     const login = await run('node', [bundle, 'login'], project)
@@ -181,7 +176,7 @@ await createCLI(commandTree, { name: 'fixture', context: () => ({ authenticated:
     expect(help.code).toBe(0)
     expect(help.stdout).toContain('fixture users create')
     await writeFile(resolve(project, 'src/cli.ts'), entry(true))
-    built = await run(process.execPath, [tooling, 'build', '--project', project], root)
+    built = await run('node', [tooling, 'build', '--project', project], root)
     expect(built.code, built.stdout + built.stderr).toBe(0)
     const allowed = await run('node', [bundle, 'users', 'create'], project)
     expect(allowed.code).toBe(0)
@@ -192,14 +187,14 @@ await createCLI(commandTree, { name: 'fixture', context: () => ({ authenticated:
 test('file renames break stale paths and builds fail instead of emitting an invalid CLI', async () => {
   const project = await setup()
   try {
-    expect((await run(process.execPath, [tooling, 'generate', '--project', project], root)).code).toBe(0)
+    expect((await run('node', [tooling, 'generate', '--project', project], root)).code).toBe(0)
     await writeFile(resolve(project, 'src/caller.ts'), `import { createCLI } from '@argrail/core'
 import { commandTree } from './commandTree.gen.ts'
 const cli = createCLI(commandTree, { name: 'fixture' })
 cli.invoke('/greet', { options: { name: 'Ada' } })\n`)
-    expect((await run(process.execPath, [tooling, 'check', '--project', project], root)).code).toBe(0)
+    expect((await run('node', [tooling, 'check', '--project', project], root)).code).toBe(0)
     await rename(resolve(project, 'src/commands/greet.ts'), resolve(project, 'src/commands/hello.ts'))
-    const checked = await run(process.execPath, [tooling, 'build', '--project', project], root)
+    const checked = await run('node', [tooling, 'build', '--project', project], root)
     expect(checked.code).not.toBe(0)
     expect(checked.stdout).toContain('"/hello"')
     expect(checked.stdout).toContain('"/greet"')
@@ -222,9 +217,15 @@ test('background mode tracks route names, source edits, and config changes witho
   }
   try {
     await writeFile(resolve(project, 'src/commands/greet.ts'), (await readFile(resolve(project, 'src/commands/greet.ts'), 'utf8')).replace("ctx.io.stdout.write('Hello ' + options.name + '\\n')", "ctx.io.stdout.write('HANDLER_WAS_EXECUTED')"))
+    await symlink(resolve(root, 'packages/skills'), resolve(project, 'node_modules/@argrail/skills'), process.platform === 'win32' ? 'junction' : 'dir')
+    await writeFile(resolve(project, 'src/commands/skills.ts'), '')
+    await mkdir(resolve(project, 'skills/test-skill/assets'), { recursive: true })
+    await writeFile(resolve(project, 'skills/test-skill/SKILL.md'), '---\nname: test-skill\ndescription: Test\n---\n')
+    const asset = resolve(project, 'skills/test-skill/assets/data.bin')
+    await writeFile(asset, new Uint8Array([0, 255, 42]))
     await mkdir(resolve(project, 'src/commands/tasks/$id'), { recursive: true })
     await writeFile(resolve(project, 'src/commands/tasks/$id/run.ts'), '')
-    child = spawn(process.execPath, [tooling, 'dev', '--project', project], { cwd: root, stdio: ['ignore', 'pipe', 'pipe'] })
+    child = spawn('node', [tooling, 'dev', '--project', project], { cwd: root, stdio: ['ignore', 'pipe', 'pipe'] })
     function collect(data: Buffer) {
       output += data
       allOutput += data
@@ -234,6 +235,21 @@ test('background mode tracks route names, source edits, and config changes witho
     child.stderr!.on('data', collect)
     await waitFor('Found 0 errors')
     expect(await readFile(resolve(project, 'src/commands/tasks/$id/run.ts'), 'utf8')).toContain('id: positional(string())')
+    const payload = resolve(project, '.argrail/skills.bundle.ts')
+    const initialPayload = await readFile(payload, 'utf8')
+    output = ''
+    await writeFile(asset, new Uint8Array([42, 255, 0]))
+    await waitFor('Type checker will refresh')
+    expect(await readFile(payload, 'utf8')).not.toBe(initialPayload)
+    output = ''
+    await rm(asset)
+    await waitFor('Type checker will refresh')
+    expect(await readFile(payload, 'utf8')).not.toContain('assets/data.bin')
+    output = ''
+    await writeFile(resolve(project, 'package.json'), '{"name":"@test/watched","type":"module"}\n')
+    await waitFor('Type checker will refresh')
+    expect(await readFile(resolve(project, 'src/commandTree.gen.ts'), 'utf8')).toContain('id: "@test/watched"')
+    output = ''
     await rename(resolve(project, 'src/commands/greet.ts'), resolve(project, 'src/commands/hello.ts'))
     await waitFor('Type checker will refresh')
     expect(await readFile(resolve(project, 'src/commandTree.gen.ts'), 'utf8')).toContain('bindCommand("/hello"')
@@ -248,6 +264,24 @@ test('background mode tracks route names, source edits, and config changes witho
     await writeFile(resolve(project, 'argrail.config.json'), '{"name":"renamed","description":"Updated CLI"}\n')
     await waitFor('Type checker will refresh')
     expect(await readFile(resolve(project, '.argrail/entry.ts'), 'utf8')).toContain('Updated CLI')
+    output = ''
+    await rm(resolve(project, 'src/commands/new.ts'))
+    await waitFor('Type checker will refresh')
+    expect(await readFile(resolve(project, 'src/commandTree.gen.ts'), 'utf8')).not.toContain('bindCommand("/new"')
+    output = ''
+    await writeFile(resolve(project, 'argrail.config.json'), '{invalid')
+    await waitFor('Error:')
+    expect(await readFile(resolve(project, '.argrail/entry.ts'), 'utf8')).toContain('Updated CLI')
+    output = ''
+    await mkdir(resolve(project, 'commands'), { recursive: true })
+    await writeFile(resolve(project, 'commands/moved.ts'), '')
+    await writeFile(resolve(project, 'argrail.config.json'), '{"name":"renamed","commandsDirectory":"commands"}\n')
+    await waitFor('Type checker will refresh')
+    expect(await readFile(resolve(project, 'src/commandTree.gen.ts'), 'utf8')).toContain('bindCommand("/moved"')
+    output = ''
+    await writeFile(resolve(project, 'commands/another.ts'), '')
+    await waitFor('Type checker will refresh')
+    expect(await readFile(resolve(project, 'src/commandTree.gen.ts'), 'utf8')).toContain('bindCommand("/another"')
     expect(allOutput).not.toContain('HANDLER_WAS_EXECUTED')
   } finally {
     if (child) {
