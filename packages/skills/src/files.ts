@@ -48,6 +48,8 @@ export function validateFiles(files: readonly SkillFile[]) {
   const names = new Set<string>()
   let bytes = 0
   for (const file of files) {
+    if (!isRecord(file) || typeof file.path !== 'string')
+      throw new CLIError('INVALID_SKILL_FILE', 'Invalid bundled file')
     safePath(file.path)
     const key = file.path.toLowerCase()
     if (names.has(key)) throw new CLIError('SKILL_COLLISION', `Duplicate skill file: ${file.path}`)

@@ -65,6 +65,46 @@ test('rejects malformed JavaScript bundle inputs', () => {
     expect(() => createSkills(input)).toThrow(/Invalid skill bundle|Invalid bundled skill/)
 })
 
+test('rejects invalid skill groups at bundle creation', () => {
+  for (const group of [
+    null,
+    {},
+    { description: 'Starter', skills: 'test-skill' },
+    { description: 'Starter', skills: [] },
+    { description: 1, skills: ['test-skill'] },
+    { description: 'Starter', skills: [1] },
+    { description: 'Starter', skills: ['missing'] },
+    { description: 'Starter', skills: ['test-skill', 'test-skill'] },
+  ])
+    expect(() => createSkills({ ...bundle(), groups: { starter: group } })).toThrow(
+      'Invalid bundled skill group: starter',
+    )
+})
+
+test('selects and deduplicates valid group members', () => {
+  const manager = createSkills({
+    ...bundle(),
+    groups: { starter: { description: 'Starter', skills: ['test-skill'] } },
+  })
+  expect(manager.select({ groups: ['starter'], skills: ['test-skill'] })).toEqual(['test-skill'])
+})
+
+test('rejects malformed loaded files before replacing installed content', () =>
+  fixture(async root => {
+    await mkdir(resolve(root, 'skills/test-skill'), { recursive: true })
+    const installed = resolve(root, 'skills/test-skill/SKILL.md')
+    await writeFile(installed, 'keep')
+    for (const file of [null, undefined, 1, 'text', {}]) {
+      const data = bundle()
+      data.skills['test-skill'].load = async () => [file]
+      const manager = createSkills(data)
+      await expect(manager.apply(await manager.plan(request(root)))).rejects.toMatchObject({
+        code: 'INVALID_SKILL_FILE',
+      })
+      expect(await readFile(installed, 'utf8')).toBe('keep')
+    }
+  }))
+
 test('installs complete resources and preserves executable intent', () =>
   fixture(async root => {
     const manager = createSkills(bundle())

@@ -14,6 +14,14 @@ async function project(run) {
 }
 
 describe('file-based generation', () => {
+  test('rejects non-object configuration with a useful error', async () => {
+    await project(async root => {
+      for (const input of [null, [], 'app', 1, true]) {
+        await writeFile(resolve(root, 'argrail.config.json'), JSON.stringify(input))
+        await expect(loadConfig(root)).rejects.toThrow('Configuration must be an object')
+      }
+    })
+  })
   test('generates one public skill registry with a lazy embedded payload and tracks resource changes', async () => {
     await project(async root => {
       await writeFile(resolve(root, 'package.json'), JSON.stringify({ name: '@test/app' }))

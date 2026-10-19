@@ -13,6 +13,7 @@ import type {
   SkillTarget,
   SkillManager,
   SkillFile,
+  SkillStatus,
 } from './types.ts'
 
 // Public bundles are untrusted parsing boundaries.
@@ -41,6 +42,18 @@ function validateBundle(input: unknown): asserts input is SkillBundle {
       !/^[a-f0-9]{64}$/.test(skill.hash)
     )
       throw new CLIError('INVALID_SKILL_BUNDLE', `Invalid bundled skill: ${name}`)
+  const skills = input.skills
+  for (const [name, group] of Object.entries(input.groups))
+    if (
+      !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(name) ||
+      !isRecord(group) ||
+      typeof group.description !== 'string' ||
+      !Array.isArray(group.skills) ||
+      !group.skills.length ||
+      group.skills.some(member => typeof member !== 'string' || !Object.hasOwn(skills, member)) ||
+      new Set(group.skills).size !== group.skills.length
+    )
+      throw new CLIError('INVALID_SKILL_BUNDLE', `Invalid bundled skill group: ${name}`)
 }
 
 async function inspect(path: string) {
@@ -240,8 +253,8 @@ export function createSkills(
     }
   }
 
-  async function status(target: SkillTarget): ReturnType<SkillManager<SkillBundle>['status']> {
-    const items: Awaited<ReturnType<SkillManager<SkillBundle>['status']>>['items'] = []
+  async function status(target: SkillTarget): Promise<SkillStatus> {
+    const items: SkillStatus['items'] = []
     const loaded = new Map<string, readonly SkillFile[]>()
     for (const destination of resolveTargets(target, settings))
       for (const name of Object.keys(bundle.skills)) {

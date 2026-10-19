@@ -91,26 +91,27 @@ export interface HarnessSettings {
   environment?: Record<string, string | undefined>
   scope?: 'project' | 'global'
 }
+export type SkillStatus = {
+  bundleId: string
+  bundleHash: string
+  items: {
+    name: string
+    path: string
+    harnesses: string[]
+    status: 'missing' | 'different' | 'unsafe' | 'current'
+    hint: string
+  }[]
+}
 export interface SkillManager<B extends SkillBundle> {
   select(selection?: SkillSelection<B>): (keyof B['skills'] & string)[]
   plan(
     request: SkillSelection<B> & {
-      action: 'add' | 'update' | 'remove'
+      action: SkillPlan['action']
       target: SkillTarget
     },
   ): Promise<SkillPlan>
   apply(plan: SkillPlan, settings?: { signal?: AbortSignal }): Promise<SkillResult>
-  status(target: SkillTarget): Promise<{
-    bundleId: string
-    bundleHash: string
-    items: {
-      name: string
-      path: string
-      harnesses: string[]
-      status: 'missing' | 'different' | 'unsafe' | 'current'
-      hint: string
-    }[]
-  }>
+  status(target: SkillTarget): Promise<SkillStatus>
 }
 type BooleanOption = Argument<boolean, false, 'flag'>
 type TextOption = Argument<string | undefined, false, 'option', string | undefined>
@@ -133,17 +134,14 @@ type ActionOptions<B extends SkillBundle> = TargetOptions & {
   yes: BooleanOption
   dryRun: BooleanOption
 }
-type Action = 'add' | 'update' | 'remove' | 'delete' | 'list' | 'status'
-type ManagementOptions<A extends Action, B extends SkillBundle> = A extends 'add' | 'update' | 'remove' | 'delete'
+type Mutation = SkillPlan['action'] | 'delete'
+type Action = Mutation | 'list' | 'status'
+type ManagementOptions<A extends Action, B extends SkillBundle> = A extends Mutation
   ? ActionOptions<B>
   : A extends 'list'
     ? { json: BooleanOption }
     : TargetOptions
-type ManagementArgs<A extends Action, B extends SkillBundle> = A extends
-  | 'add'
-  | 'update'
-  | 'remove'
-  | 'delete'
+type ManagementArgs<A extends Action, B extends SkillBundle> = A extends Mutation
   ? readonly [
       NamedArgument<
         'names',
@@ -164,7 +162,7 @@ type SkillList<B extends SkillBundle> = {
 type ManagementResult<A extends Action, B extends SkillBundle> = A extends 'list'
   ? SkillList<B>
   : A extends 'status'
-    ? Awaited<ReturnType<SkillManager<B>['status']>> | CommandFailure
+    ? SkillStatus | CommandFailure
     : SkillResult | SkillPlan | Cancelled | CommandFailure
 type ManagementCommand<Mount extends string, A extends Action, B extends SkillBundle> = Command<
   `/${Mount}/${A}`,

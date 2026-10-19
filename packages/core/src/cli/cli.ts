@@ -79,7 +79,7 @@ function optionScope(): OptionScope {
 function compileCommands(registry: Registry): CompiledCommand[] {
   const entries = Object.values(registry).map(command => {
     const aliases: CompiledCommand['aliases'] = new Map()
-    for (const [key, descriptor] of Object.entries<Arguments[string]>(command.options)) {
+    for (const [key, descriptor] of Object.entries(command.options)) {
       const alias = { key, negated: false, takesValue: descriptor.kind !== 'flag' }
       aliases.set(`--${optionName(key)}`, alias)
       if (descriptor.short) aliases.set(`-${descriptor.short}`, alias)
@@ -326,7 +326,7 @@ export function createCLI<const R extends Registry>(registry: R & { [P in keyof 
       sections.push(`Commands:\n${table([...groups].sort(([a], [b]) => a.localeCompare(b)), width)}`)
     }
     const argumentRows: [string, string][] = command ? [
-      ...Object.entries<Arguments[string]>(command.params).map(([key, arg]): [string, string] => [
+      ...Object.entries(command.params).map(([key, arg]): [string, string] => [
         `<${key}>`, [arg.description, `Type: ${arg.value.label}. Required.`].filter(Boolean).join(' '),
       ]),
       ...command.args.map((arg): [string, string] => [arg.required ? `<${arg.name}${arg.variadic ? '...' : ''}>` : `[${arg.name}${arg.variadic ? '...' : ''}]`, [arg.description, `Type: ${arg.value.label}.`, arg.required ? 'Required.' : '', arg.hasDefault ? `Default: ${JSON.stringify(arg.defaultValue)}.` : ''].filter(Boolean).join(' ')]),
@@ -334,7 +334,7 @@ export function createCLI<const R extends Registry>(registry: R & { [P in keyof 
     if (argumentRows.length) {
       sections.push(`Arguments:\n${table(argumentRows, width)}`)
     }
-    const rows: [string, string][] = command ? Object.entries<Arguments[string]>(command.options).map(([key, arg]) => [
+    const rows: [string, string][] = command ? Object.entries(command.options).map(([key, arg]) => [
       `${arg.short ? `-${arg.short}, ` : ''}--${optionName(key)}${arg.kind === 'flag' ? '' : ` <${arg.element?.label ?? arg.value.label}>`}`,
       [arg.description, arg.required ? 'Required.' : '', arg.hasDefault ? `Default: ${JSON.stringify(arg.defaultValue)}.` : '',
         arg.repeated ? 'Repeatable.' : '', arg.kind === 'flag' && arg.negate ? `Negate with --no-${optionName(key)}.` : ''].filter(Boolean).join(' '),

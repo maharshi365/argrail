@@ -11,15 +11,11 @@ import {
   type CommandContext,
   type Group,
   type InputChoice,
+  type Output,
 } from '@argrail/core'
 import { createSkills } from './manager.ts'
 import { listHarnesses } from './harnesses/resolve.ts'
 import type { SkillBundle, SkillTarget, SkillPlan, ManagementCommands, GroupedManagementCommands } from './types.ts'
-
-interface TargetValues { harness: string[]; global: boolean; project: string | undefined; path: string | undefined; json: boolean }
-interface ActionValues extends TargetValues { group: string[]; all: boolean }
-interface ExecutionValues { dryRun: boolean; json: boolean; yes: boolean }
-type ManagementValues = ActionValues & ExecutionValues
 
 const targetOptions = {
   harness: repeatableOption(string(), {
@@ -39,6 +35,9 @@ const actionOptions = {
   yes: flag({ short: 'y', description: 'Skip confirmation, including directory replacement.' }),
   dryRun: flag({ description: 'Preview without writing files.' }),
 }
+type TargetValues = Output<typeof targetOptions>
+type ActionValues = Output<typeof actionOptions>
+type ExecutionValues = Pick<ActionValues, 'dryRun' | 'json' | 'yes'>
 
 export function createSkillsCommands<const B extends SkillBundle, const Mount extends string, const G extends readonly Group[]>(bundle: B, mount: Mount, groups: G): GroupedManagementCommands<Mount, B, G>
 export function createSkillsCommands<const B extends SkillBundle, const Mount extends string = 'skills'>(bundle: B, mount?: Mount): ManagementCommands<Mount, B>
@@ -164,8 +163,7 @@ export function createSkillsCommands(bundle: SkillBundle, mount = 'skills', grou
       description: `${action === 'add' ? 'Install' : action === 'update' ? 'Update' : 'Remove'} skills bundled with this CLI.`,
       args: [variadicArgument('names', string())],
       options: actionOptions,
-      run: async ({ args, options: parsedOptions, ctx }) => {
-        const options: ManagementValues = parsedOptions
+      run: async ({ args, options, ctx }) => {
         try {
           const destination = await target(options, ctx)
           const skills = await selection(args, options, ctx, destination)

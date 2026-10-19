@@ -3,9 +3,17 @@ import { dirname, relative, resolve, isAbsolute, sep } from 'node:path'
 import { discoverSkills, parseSkillGroups } from '@argrail/skills/build'
 import ts from 'typescript'
 import type { SkillBuildConfig } from '@argrail/skills/build'
+import type { CLISettings } from '@argrail/core'
 import { parseTypeScript } from './typescript.ts'
 
-export type ProjectConfig = Awaited<ReturnType<typeof loadConfig>>
+export interface ProjectConfig {
+  root: string
+  commandsDirectory: string
+  generatedRegistry: string
+  outDirectory: string
+  entry: string | undefined
+  settings: CLISettings
+}
 interface Route { file: string; path: string }
 type StaticValue = string | readonly StaticValue[] | { readonly [key: string]: StaticValue }
 
@@ -42,8 +50,8 @@ function isGroupFile(file: string) {
 
 export async function discover(directory: string) {
   const files = await sourceFiles(directory)
-  const paths = new Set()
-  const dynamic = new Map()
+  const paths = new Set<string>()
+  const dynamic = new Map<string, string>()
   return files.filter(file => !isGroupFile(file)).map(file => {
     const path = commandPath(relative(directory, file))
     if (paths.has(path)) throw new Error(`Duplicate command path: ${path}`)
@@ -79,7 +87,8 @@ export async function writeIfChanged(file: string, content: string) {
   return true
 }
 
-function within(root: string, name: string, label: string) {
+// oxlint-disable-next-line deslop/no-unknown-parameters -- Configuration paths must be validated before resolution.
+function within(root: string, name: unknown, label: string) {
   // oxlint-disable-next-line deslop/no-runtime-typeof -- Parse an untrusted configuration path before resolving it.
   if (typeof name !== 'string' || !name || isAbsolute(name)) throw new Error(`${label} must be a relative path`)
   const destination = resolve(root, name)
@@ -88,26 +97,36 @@ function within(root: string, name: string, label: string) {
   return destination
 }
 
-export async function loadConfig(project: string) {
+export async function loadConfig(project: string): Promise<ProjectConfig> {
   const root = resolve(project)
-  const raw = JSON.parse(await readFile(resolve(root, 'argrail.config.json'), 'utf8'))
-  const allowed = new Set(['name', 'version', 'description', 'width', 'commandsDirectory', 'generatedRegistry', 'outDirectory', 'entry'])
-  for (const key of Object.keys(raw)) if (!allowed.has(key)) throw new Error(`Unknown configuration key: ${key}`)
+  const raw: unknown = JSON.parse(await readFile(resolve(root, 'argrail.config.json'), 'utf8'))
   // Configuration JSON is a parsing boundary; check types before using its fields.
   /* oxlint-disable deslop/no-runtime-typeof */
-  if (typeof raw.name !== 'string' || !/^[a-zA-Z][a-zA-Z0-9-]*$/.test(raw.name)) throw new Error('Configuration requires a valid CLI name')
-  for (const key of ['version', 'description']) if (raw[key] !== undefined && typeof raw[key] !== 'string') throw new Error(`${key} must be text`)
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error('Configuration must be an object')
+  const allowed = new Set(['name', 'version', 'description', 'width', 'commandsDirectory', 'generatedRegistry', 'outDirectory', 'entry'])
+  for (const key of Object.keys(raw)) if (!allowed.has(key)) throw new Error(`Unknown configuration key: ${key}`)
+  // SAFETY: JSON produced a non-null, non-array object; every field is validated below.
+  // oxlint-disable-next-line deslop/no-unsafe-dictionary-type -- This dictionary exists only while parsing configuration JSON.
+  const fields = raw as Record<string, unknown>
+  const { name, version, description, width } = fields
+  if (typeof name !== 'string' || !/^[a-zA-Z][a-zA-Z0-9-]*$/.test(name)) throw new Error('Configuration requires a valid CLI name')
+  if (version !== undefined && typeof version !== 'string') throw new Error('version must be text')
+  if (description !== undefined && typeof description !== 'string') throw new Error('description must be text')
+  if (width !== undefined && (typeof width !== 'number' || !Number.isInteger(width) || width < 40)) throw new Error('width must be an integer of at least 40')
   /* oxlint-enable deslop/no-runtime-typeof */
-  if (raw.width !== undefined && (!Number.isInteger(raw.width) || raw.width < 40)) throw new Error('width must be an integer of at least 40')
-  const commandsDirectory = within(root, raw.commandsDirectory ?? 'src/commands', 'commandsDirectory')
-  const generatedRegistry = within(root, raw.generatedRegistry ?? 'src/commandTree.gen.ts', 'generatedRegistry')
+  const settings: CLISettings = { name }
+  if (version !== undefined) settings.version = version
+  if (description !== undefined) settings.description = description
+  if (width !== undefined) settings.width = width
+  const commandsDirectory = within(root, fields.commandsDirectory ?? 'src/commands', 'commandsDirectory')
+  const generatedRegistry = within(root, fields.generatedRegistry ?? 'src/commandTree.gen.ts', 'generatedRegistry')
   if (!generatedRegistry.endsWith('.gen.ts')) throw new Error('generatedRegistry must end in .gen.ts')
-  const outDirectory = within(root, raw.outDirectory ?? 'dist', 'outDirectory')
+  const outDirectory = within(root, fields.outDirectory ?? 'dist', 'outDirectory')
   if (outDirectory === commandsDirectory || commandsDirectory.startsWith(outDirectory + sep)) throw new Error('outDirectory cannot contain command sources')
   return {
     root, commandsDirectory, generatedRegistry, outDirectory,
-    entry: raw.entry === undefined ? undefined : within(root, raw.entry, 'entry'),
-    settings: Object.fromEntries(['name', 'version', 'description', 'width'].flatMap(key => raw[key] === undefined ? [] : [[key, raw[key]]])),
+    entry: fields.entry === undefined ? undefined : within(root, fields.entry, 'entry'),
+    settings,
   }
 }
 
