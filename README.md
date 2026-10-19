@@ -81,6 +81,7 @@ export const Command = defineCommand({
 - `index.ts` defines a group entry. `$name` segments need matching parameter definitions.
 - Static commands take priority over dynamic routes.
 - Options can appear before or between command words. `--` ends option parsing.
+- Short flags can be bundled (`-vf`); short options accept attached values (`-n10`).
 - Parent parameters and options are not inherited. Share definitions explicitly.
 - Middleware is inherited. A command's middleware protects that command and its descendants.
 - Overlapping routes must agree on whether a shared option alias takes a value.

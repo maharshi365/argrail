@@ -139,14 +139,44 @@ function compileCommands(registry: Registry): CompiledCommand[] {
   return entries
 }
 
+const negativeNumber = /^-(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i
+
+function expandShortOptions(argv: readonly string[], arities: ReadonlyMap<string, boolean>): string[] {
+  const tokens: string[] = []
+  let positionalOnly = false
+  for (const token of argv) {
+    if (token === '--') positionalOnly = true
+    if (positionalOnly || token.length <= 2 || !token.startsWith('-') || token.startsWith('--') || negativeNumber.test(token)) {
+      tokens.push(token)
+      continue
+    }
+    for (let index = 1; index < token.length; index++) {
+      const name = `-${token[index]}`
+      const takesValue = name === '-h' ? false : arities.get(name)
+      if (takesValue === undefined) {
+        tokens.push(token)
+        break
+      }
+      const rest = token.slice(index + 1)
+      if (takesValue || rest.startsWith('=')) {
+        tokens.push(rest ? `${name}=${rest.startsWith('=') ? rest.slice(1) : rest}` : name)
+        break
+      }
+      tokens.push(name)
+    }
+  }
+  return tokens
+}
+
 function tokenize(argv: readonly string[], entry: CompiledCommand): Tokens {
   const result: Tokens = { words: [], options: {}, errors: [], help: false }
+  const tokens = expandShortOptions(argv, entry.arities)
   let positionalOnly = false
-  for (let index = 0; index < argv.length; index++) {
-    const token = argv[index]!
+  for (let index = 0; index < tokens.length; index++) {
+    const token = tokens[index]!
     if (!positionalOnly && token === '--') { positionalOnly = true; continue }
     if (!positionalOnly && (token === '--help' || token === '-h')) { result.help = true; continue }
-    if (positionalOnly || token === '-' || !token.startsWith('-') || /^-\d/.test(token)) { result.words.push(token); continue }
+    if (positionalOnly || token === '-' || !token.startsWith('-') || negativeNumber.test(token)) { result.words.push(token); continue }
     const equals = token.indexOf('=')
     const name = equals < 0 ? token : token.slice(0, equals)
     const alias = entry.aliases.get(name)
@@ -168,8 +198,8 @@ function tokenize(argv: readonly string[], entry: CompiledCommand): Tokens {
     } else if (equals >= 0) {
       assign(token.slice(equals + 1))
     } else {
-      const next = argv[index + 1]
-      if (next === undefined || (next !== '-' && next.startsWith('-') && !/^-\d/.test(next))) {
+      const next = tokens[index + 1]
+      if (next === undefined || (next !== '-' && next.startsWith('-') && !negativeNumber.test(next))) {
         if (alias) result.errors.push(`missing value for ${name}`)
       } else {
         assign(next)
@@ -313,7 +343,7 @@ export function createCLI<const R extends Registry>(registry: R & { [P in keyof 
     const display = segments.map(segment => segment.startsWith('$') ? `<${segment.slice(1)}>` : segment).join(' ')
     const title = [settings.name, display].filter(Boolean).join(' ')
     const trailing = command?.args.map(arg => arg.required ? `<${arg.name}${arg.variadic ? '...' : ''}>` : `[${arg.name}${arg.variadic ? '...' : ''}]`).join(' ')
-    const sections = [`Usage: ${title}${children.length && !command?.run ? ' <command>' : ''}${trailing ? ` ${trailing}` : ''} [options]`]
+    const sections = [wrap(`Usage: ${title}${children.length && !command?.run ? ' <command>' : ''}${trailing ? ` ${trailing}` : ''} [options]`, width)]
     const description = command?.description || (path === '/' ? settings.description : '')
     if (description) sections.push(wrap(description, width))
     if (children.length) {
@@ -345,7 +375,7 @@ export function createCLI<const R extends Registry>(registry: R & { [P in keyof 
     for (const section of [...(path === '/' ? settings.sections ?? [] : []), ...(command?.sections ?? [])]) {
       sections.push(`${section.title}:\n${wrap(section.body, width)}`)
     }
-    if (path === '/') sections.push(`Run "${settings.name} help <command>" for command help.`)
+    if (path === '/' && children.length) sections.push(wrap(`Run "${settings.name} help <command>" for command help.`, width))
     return sections.join('\n\n') + '\n'
   }
 
@@ -447,7 +477,7 @@ export function createCLI<const R extends Registry>(registry: R & { [P in keyof 
         // A command group has help even without an index handler.
         const words = argv.filter(token => token !== '--help' && token !== '-h')
         const path = words.some(word => word.startsWith('-')) ? undefined : groupPath(words)
-        if (!argv.length || path) {
+        if (!words.length || path) {
           return showHelp(path ?? '/')
         }
         throw new CLIError('COMMAND_NOT_FOUND', 'Unknown command or unexpected arguments. Run --help to see supported commands.')

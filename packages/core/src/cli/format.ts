@@ -20,7 +20,7 @@ export function table(rows: readonly (readonly [string, string])[], width: numbe
   return rows.map(([label, description]) => {
     const indent = ' '.repeat(labelWidth + 4)
     if (width < 60 || label.length > labelWidth) {
-      return `  ${label}\n${wrap(description, width, '    ')}`.trimEnd()
+      return `${wrap(label, width, '  ')}\n${wrap(description, width, '    ')}`.trimEnd()
     }
     const details = wrap(description, width, indent).split('\n')
     return `  ${label.padEnd(labelWidth)}  ${(details[0] ?? '').slice(indent.length)}${details.length > 1 ? `\n${details.slice(1).join('\n')}` : ''}`.trimEnd()

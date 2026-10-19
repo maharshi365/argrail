@@ -95,13 +95,14 @@ export function integer(settings: { min?: number; max?: number } = {}): Value<nu
 }
 
 export function choice<const T extends readonly [string, ...string[]]>(choices: T): Value<T[number]> {
+  const allowed = Object.freeze([...choices])
   const validate = (input: unknown): T[number] => {
-    if (typeof input !== 'string' || !choices.includes(input)) {
-      throw new ValidationError(`expected one of: ${choices.join(', ')}`)
+    if (typeof input !== 'string' || !allowed.includes(input)) {
+      throw new ValidationError(`expected one of: ${allowed.join(', ')}`)
     }
     return input
   }
-  return value(choices.join('|'), { parse: validate, validate })
+  return value(allowed.join('|'), { parse: validate, validate })
 }
 
 export interface Argument<T, Required extends boolean = boolean, Kind extends 'positional' | 'option' | 'flag' = 'positional' | 'option' | 'flag', Input = T> {
