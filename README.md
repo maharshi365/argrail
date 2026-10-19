@@ -9,6 +9,18 @@ Think **TanStack Router, but for CLIs**: your file tree defines command paths,
 Instead of matching URLs, Argrail matches command-line arguments. This is a
 similar design, not a TanStack integration.
 
+## Installation
+
+Use Node.js 22.22 or later. In your app, install the runtime and development tools:
+
+```sh
+npm install @argrail/core
+npm install -D @argrail/tooling
+```
+
+For bundled skills, also install `@argrail/skills` as a runtime dependency.
+See [Set up your app](#set-up-your-app) for configuration and development scripts.
+
 ## File-based commands
 
 ```text
