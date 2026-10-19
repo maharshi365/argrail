@@ -1,8 +1,9 @@
 import { readdir, readFile, mkdir, writeFile, rename } from 'node:fs/promises'
 import { dirname, relative, resolve, isAbsolute, sep } from 'node:path'
-import { discoverSkills } from '@argrail/skills/build'
+import { discoverSkills, parseSkillGroups } from '@argrail/skills/build'
 import ts from 'typescript'
 import type { SkillBuildConfig } from '@argrail/skills/build'
+import { parseTypeScript } from './typescript.ts'
 
 export type ProjectConfig = Awaited<ReturnType<typeof loadConfig>>
 interface Route { file: string; path: string }
@@ -111,9 +112,7 @@ export async function loadConfig(project: string) {
 }
 
 async function routeSkillGroups(route: Route): Promise<NonNullable<SkillBuildConfig['groups']>> {
-  const source = ts.createSourceFile(route.file, await readFile(route.file, 'utf8'), ts.ScriptTarget.Latest, true, ts.ScriptKind.TS)
-  // SAFETY: TypeScript's parser attaches parseDiagnostics to every SourceFile, but omits it from the public interface.
-  if ((source as ts.SourceFile & { parseDiagnostics: readonly ts.Diagnostic[] }).parseDiagnostics.length) throw new Error(`${route.file}: Invalid route TypeScript`)
+  const source = parseTypeScript(route.file, await readFile(route.file, 'utf8'), `${route.file}: Invalid route TypeScript`)
   function literal(node: ts.Node): StaticValue {
     if (ts.isAsExpression(node) || ts.isSatisfiesExpression(node) || ts.isParenthesizedExpression(node)) return literal(node.expression)
     if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) return node.text
@@ -137,8 +136,7 @@ async function routeSkillGroups(route: Route): Promise<NonNullable<SkillBuildCon
         if (!declaration.initializer) throw new Error(`${route.file}: SkillGroups must be a static object literal`)
         const groups = literal(declaration.initializer)
         if (!groups || Array.isArray(groups) || Object.getPrototypeOf(groups) !== null) throw new Error(`${route.file}: SkillGroups must be a static object literal`)
-        // SAFETY: discoverSkills validates each group's fields before building the bundle; this is still boundary data.
-        return groups as NonNullable<SkillBuildConfig['groups']>
+        return parseSkillGroups(groups)
       }
     }
   }

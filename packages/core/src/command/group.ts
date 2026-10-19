@@ -3,11 +3,11 @@ import type { MiddlewareList, MiddlewareContext, MiddlewareRequirements } from '
 export interface Group<M extends MiddlewareList = MiddlewareList> {
   readonly middleware: M
 }
-export function defineGroup<const M extends MiddlewareList = []>(
-  config: { middleware?: M } = {},
-): Group<M> {
-  // SAFETY: middleware is preserved as M when supplied; the default middleware tuple is empty.
-  return { middleware: config.middleware ?? [] } as Group<M>
+export function defineGroup(): Group<[]>
+export function defineGroup(config: { middleware?: never }): Group<[]>
+export function defineGroup<const M extends MiddlewareList>(config: { middleware: M }): Group<M>
+export function defineGroup(config: { middleware?: MiddlewareList } = {}): Group {
+  return { middleware: config.middleware ?? [] }
 }
 export const defineRoot = defineGroup
 export type GroupMiddleware<G extends readonly Group[]> = G extends readonly [

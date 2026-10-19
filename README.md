@@ -137,6 +137,7 @@ export const Command = createFileCommand('/deploy')({
   Supply services not added by ancestors through `createCLI({ context })`.
 - Middleware must return `next()` or `await next()`'s result, or throw an error.
   Use `try/finally` around `await next()` for cleanup. Call `next()` only once.
+  The result envelope is frozen. Do not replace it or change its `value` field.
 - Context additions are shallow and invocation-scoped. Existing keys and unsafe
   property names cannot be replaced. Framework fields such as `ctx.io` stay separate.
 - `cli.invoke()`, `cli.execute()`, `cli.test()`, and `cli.run()` use the same pipeline.

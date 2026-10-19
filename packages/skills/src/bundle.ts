@@ -20,6 +20,29 @@ export interface SkillBuildConfig { id: string; directory: string; groups?: Skil
 /* oxlint-disable deslop/no-runtime-typeof */
 
 const namePattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
+// oxlint-disable-next-line deslop/no-unknown-parameters -- Static route literals and JavaScript build configuration are untrusted input.
+export function parseSkillGroups(input: unknown): SkillBundle['groups'] {
+  if (!isRecord(input)) throw new Error('SkillGroups must be a static object literal')
+  const groups: Record<string, SkillBundle['groups'][string]> = Object.create(null)
+  for (const [name, group] of Object.entries(input)) {
+    if (
+      !namePattern.test(name) ||
+      !isRecord(group) ||
+      !Array.isArray(group.skills) ||
+      !group.skills.length ||
+      typeof group.description !== 'string' ||
+      Object.keys(group).some(key => key !== 'skills' && key !== 'description')
+    ) throw new Error(`Invalid skill group: ${name}`)
+    const skills: string[] = []
+    for (const member of group.skills) {
+      if (typeof member !== 'string') throw new Error(`Invalid skill group: ${name}`)
+      skills.push(member)
+    }
+    if (new Set(skills).size !== skills.length) throw new Error(`Group ${name}: duplicate members`)
+    groups[name] = { description: group.description, skills }
+  }
+  return groups
+}
 const execute = promisify(execFile)
 async function executablePaths(directory: string) {
   const paths = new Set<string>()
@@ -115,21 +138,10 @@ export async function discoverSkills(config: SkillBuildConfig) {
     files[metadata.name] = resources
   }
   if (!Object.keys(skills).length) throw new Error(`${config.directory}: no skills found`)
-  const groups = config.groups ?? {}
-  for (const [name, group] of Object.entries<unknown>(groups)) {
-    if (
-      !namePattern.test(name) ||
-      !isRecord(group) ||
-      !Array.isArray(group.skills) ||
-      !group.skills.length ||
-      typeof group.description !== 'string' ||
-      Object.keys(group).some(key => key !== 'skills' && key !== 'description')
-    )
-      throw new Error(`Invalid skill group: ${name}`)
+  const groups = parseSkillGroups(config.groups ?? {})
+  for (const [name, group] of Object.entries(groups)) {
     for (const member of group.skills)
       if (!Object.hasOwn(skills, member)) throw new Error(`Group ${name}: unknown skill ${member}`)
-    if (new Set(group.skills).size !== group.skills.length)
-      throw new Error(`Group ${name}: duplicate members`)
   }
   const hash = digest(JSON.stringify({ id: config.id, skills, groups }))
   return { id: config.id, hash, skills, groups, files }

@@ -95,6 +95,14 @@ describe('file-based generation', () => {
       await expect(generate(config)).rejects.toThrow('static object literal')
     })
   })
+  test('rejects non-string skill group members instead of coercing them to skill names', async () => {
+    await project(async (root, config) => {
+      await writeFile(resolve(root, 'src/commands/skills.ts'), "export const SkillGroups = { starter: { description: 'Starter', skills: [['test-skill']] } }")
+      await mkdir(resolve(root, 'skills/test-skill'), { recursive: true })
+      await writeFile(resolve(root, 'skills/test-skill/SKILL.md'), '---\nname: test-skill\ndescription: Test\n---\n')
+      await expect(generate(config)).rejects.toThrow('Invalid skill group: starter')
+    })
+  })
   test('bundle identity changes invalidate the watched bundle and invalid package names preserve output', async () => {
     await project(async (root, config) => {
       await writeFile(resolve(root, 'src/commands/skills.ts'), '')

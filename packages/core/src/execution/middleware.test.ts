@@ -326,6 +326,38 @@ test('rejects malformed middleware results even after next executes', async () =
   }
 })
 
+test('rejects middleware that replaces the command result after next executes', async () => {
+  const command = bindCommand('/run', defineCommand({
+    middleware: [createMiddleware().handler(async ({ next }) => {
+      await next()
+      return { value: 'not the numeric command result' }
+    })],
+    run: () => 42,
+  }))
+  await expect(createCLI({ '/run': command }, { name: 'app' }).invoke('/run', {})).rejects.toThrow(
+    'Middleware must return the result of next()',
+  )
+})
+
+test('middleware cannot mutate the result envelope returned by next', async () => {
+  const command = bindCommand('/run', defineCommand({
+    middleware: [createMiddleware().handler(async ({ next }) => {
+      const result = await next()
+      Object.assign(result, { value: 'replacement' })
+      return result
+    })],
+    run: () => 42,
+  }))
+  await expect(createCLI({ '/run': command }, { name: 'app' }).invoke('/run', {})).rejects.toThrow()
+})
+
+test('empty groups use empty middleware and configured groups retain their middleware', () => {
+  const middleware = [createMiddleware().handler(({ next }) => next())]
+  expect(defineGroup().middleware).toEqual([])
+  expect(defineGroup({}).middleware).toEqual([])
+  expect(defineGroup({ middleware }).middleware).toBe(middleware)
+})
+
 test('cancellation stops downstream execution and still runs wrapper cleanup', async () => {
   const controller = new AbortController()
   let cleaned = false,

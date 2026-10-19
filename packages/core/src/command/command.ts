@@ -188,8 +188,7 @@ export function createFileCommand<const Path extends string>(path: Path) {
     config: Configuration<Path, Params, Options, Args, M> & { run: Handler<Params, Options, Args, FileCommandContext<Path>, Result, M> },
   ): Command<Path, Params, Options, Result, Args, FileCommandContext<Path>, M>
   function file(config: RuntimeConfig): AnyCommand {
-    // SAFETY: build creates the runtime command; the overloads retain its path, arguments, and handler types.
-    return build(path, config) as AnyCommand
+    return build(path, config)
   }
   return file
 }
@@ -238,7 +237,7 @@ type RuntimeConfig = DefinitionConfig<Arguments, Arguments, readonly NamedArgume
   validateOptions?: ObjectSchema
   optionConfig?: Record<string, OptionSettings>
 }
-function build(path: string | undefined, config: RuntimeConfig): AnyDefinition {
+function build<P extends string | undefined>(path: P, config: RuntimeConfig): AnyDefinition & { readonly path: P } {
   if (config.validateParams && config.params)
     throw new ValidationError('params and validateParams cannot be combined')
   if (config.validateOptions && config.options)

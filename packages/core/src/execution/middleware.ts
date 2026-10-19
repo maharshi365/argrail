@@ -17,6 +17,7 @@ export interface Middleware<Required = {}, Added = {}> {
 // Erasure is confined to dispatch. Definitions retain their context requirements and additions.
 export type AnyMiddleware = Middleware<any, any>
 export type MiddlewareList = readonly AnyMiddleware[]
+interface DispatchState { called: boolean; active: boolean; result?: MiddlewareResult }
 type Added<M> = M extends Middleware<any, infer A> ? A : {}
 type Required<M> = M extends Middleware<infer R, any> ? R : {}
 export type MiddlewareContext<M extends MiddlewareList> = M extends readonly [
@@ -53,7 +54,7 @@ export async function runMiddleware(
     checkSignal(current.signal)
     const middleware = middlewares[index]
     if (!middleware) return { value: await terminal(current) }
-    const state = { called: false, active: true }
+    const state: DispatchState = { called: false, active: true }
     const next: MiddlewareNext = async <Added extends object = {}>(settings?: {
       context: Added
     }) => {
@@ -88,19 +89,19 @@ export async function runMiddleware(
         enumerable: true,
       })
       const result = await dispatch(index + 1, downstream)
-      if (settings) return { value: result.value, context: settings.context }
-      return { value: result.value }
+      const output = Object.freeze(settings ? { value: result.value, context: settings.context } : { value: result.value })
+      state.result = output
+      return output
     }
     try {
-      const result: unknown = await middleware.handler({ ctx: current, next })
-      // Untyped middleware can omit next() or return a malformed result.
-      if (!state.called || !result || !Object.prototype.hasOwnProperty.call(result, 'value'))
+      const result = await middleware.handler({ ctx: current, next })
+      // Only the immutable envelope created by next() may leave this stage.
+      if (!state.result || result !== state.result)
         throw new CLIError(
           'INVALID_MIDDLEWARE',
           'Middleware must return the result of next() or throw an error',
         )
-      // SAFETY: next() was called and the result has the required value field; dispatch reads only that field.
-      return result as MiddlewareResult
+      return state.result
     } finally {
       state.active = false
     }

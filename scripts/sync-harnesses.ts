@@ -5,6 +5,7 @@ import { readFile, writeFile, mkdir, rename } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import { dirname, resolve } from 'node:path'
 import type { PathRule, HarnessRegistry } from '../packages/skills/src/harnesses/types.ts'
+import { parseTypeScript } from '../packages/tooling/src/typescript.ts'
 
 const repository = 'vercel-labs/skills'
 const destination = resolve(
@@ -18,18 +19,11 @@ async function download(url: string) {
   return response.text()
 }
 export function extractHarnesses(source: string): HarnessRegistry['harnesses'] {
-  const file = ts.createSourceFile(
+  const file = parseTypeScript(
     'agents.ts',
     source,
-    ts.ScriptTarget.Latest,
-    true,
-    ts.ScriptKind.TS,
+    'Upstream registry contains invalid TypeScript; existing registry was not changed',
   )
-  // SAFETY: TypeScript's parser attaches parseDiagnostics to every SourceFile, but omits it from the public interface.
-  if ((file as ts.SourceFile & { parseDiagnostics: readonly ts.Diagnostic[] }).parseDiagnostics.length)
-    throw new Error(
-      'Upstream registry contains invalid TypeScript; existing registry was not changed',
-    )
   const aliases = new Map<string, PathRule | null>([
     ['home', { kind: 'home' }],
     [

@@ -99,8 +99,7 @@ export function choice<const T extends readonly [string, ...string[]]>(choices: 
     if (typeof input !== 'string' || !choices.includes(input)) {
       throw new ValidationError(`expected one of: ${choices.join(', ')}`)
     }
-    // SAFETY: the membership check above proves input is one of the literal choices.
-    return input as T[number]
+    return input
   }
   return value(choices.join('|'), { parse: validate, validate })
 }

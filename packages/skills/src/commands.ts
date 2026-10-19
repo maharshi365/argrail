@@ -20,7 +20,6 @@ interface TargetValues { harness: string[]; global: boolean; project: string | u
 interface ActionValues extends TargetValues { group: string[]; all: boolean }
 interface ExecutionValues { dryRun: boolean; json: boolean; yes: boolean }
 type ManagementValues = ActionValues & ExecutionValues
-interface HarnessTarget { scope: 'global' | 'project'; harnesses: string[]; project?: string }
 
 const targetOptions = {
   harness: repeatableOption(string(), {
@@ -85,10 +84,9 @@ export function createSkillsCommands(bundle: SkillBundle, mount = 'skills', grou
           }),
       })
     }
-    const result: HarnessTarget = { scope, harnesses }
-    if (options.project !== undefined) result.project = options.project
-    // SAFETY: global and project were checked for mutual exclusion before building this target.
-    return result as SkillTarget
+    if (scope === 'global') return { scope, harnesses }
+    if (options.project !== undefined) return { scope, harnesses, project: options.project }
+    return { scope, harnesses }
   }
   async function selection(args: { names: string[] }, options: ActionValues, ctx: CommandContext, destination: SkillTarget) {
     let skills = manager.select({ skills: args.names, groups: options.group, all: options.all })

@@ -181,7 +181,7 @@ function tokenize(argv: readonly string[], entry: CompiledCommand): Tokens {
 }
 
 // oxlint-disable-next-line deslop/no-unknown-parameters -- Argument bags are validated at the invocation boundary.
-function decodeArguments(definitions: Arguments, supplied: unknown, label: string, shell = false, schema?: AnyCommand['validateOptions']): Output<Arguments> {
+function decodeArguments(definitions: Arguments, supplied: unknown, label: string, schema?: AnyCommand['validateOptions']): Output<Arguments> {
   // oxlint-disable-next-line deslop/no-runtime-typeof -- JavaScript callers can pass non-object argument bags.
   if (typeof supplied !== 'object' || supplied === null || Array.isArray(supplied)) {
     throw new ValidationError(`${label} values must be an object`)
@@ -200,23 +200,38 @@ function decodeArguments(definitions: Arguments, supplied: unknown, label: strin
       else result[key] = undefined
       continue
     }
-    try {
-      if (shell && descriptor.element && (descriptor.repeated || descriptor.variadic)) {
-        const element = descriptor.element
-        // SAFETY: shell tokenization stores repeated options and variadic arguments as string arrays.
-        result[key] = (input as string[]).map(text => element.decode ? element.decode(text) : element.validate(element.parse(text)))
-      }
-      else if (shell && descriptor.kind !== 'flag' && descriptor.value.decode) {
-        // SAFETY: shell tokenization stores non-flag, non-collection values as strings.
-        result[key] = descriptor.value.decode(input as string)
-      }
-      else {
-        // SAFETY: shell tokenization stores non-flag, non-collection values as strings.
-        const decoded = shell && descriptor.kind !== 'flag' ? descriptor.value.parse(input as string) : input
-        result[key] = descriptor.value.validate(decoded)
-      }
-    }
+    try { result[key] = descriptor.value.validate(input) }
     catch (error) {
+      if (!(error instanceof ValidationError)) throw error
+      throw new ValidationError(`${label} ${key}: ${error.message}`)
+    }
+  }
+  return result
+}
+
+function decodeShellArguments(definitions: Arguments, supplied: Tokens['options'], label: string, schema?: AnyCommand['validateOptions']): Output<Arguments> {
+  if (schema) return schemaValue(`${label} values`, schema).validate(supplied)
+  const result: Output<Arguments> = {}
+  for (const [key, descriptor] of Object.entries(definitions)) {
+    const input = Object.prototype.hasOwnProperty.call(supplied, key) ? supplied[key] : undefined
+    if (input === undefined) {
+      if (descriptor.hasDefault) result[key] = descriptor.value.validate(descriptor.defaultValue)
+      else if (descriptor.required) throw new ValidationError(`missing ${label}: ${key}`)
+      else result[key] = undefined
+      continue
+    }
+    try {
+      if (descriptor.element && (descriptor.repeated || descriptor.variadic)) {
+        if (!Array.isArray(input)) throw new ValidationError('expected repeated text values')
+        const element = descriptor.element
+        result[key] = input.map(text => element.decode ? element.decode(text) : element.validate(element.parse(text)))
+      } else if (descriptor.kind === 'flag') result[key] = descriptor.value.validate(input)
+      else {
+        // oxlint-disable-next-line deslop/no-runtime-typeof -- Check the tokenizer's scalar representation before decoding text.
+        if (typeof input !== 'string') throw new ValidationError('expected text')
+        result[key] = descriptor.value.decode ? descriptor.value.decode(input) : descriptor.value.validate(descriptor.value.parse(input))
+      }
+    } catch (error) {
       if (!(error instanceof ValidationError)) throw error
       throw new ValidationError(`${label} ${key}: ${error.message}`)
     }
@@ -361,8 +376,8 @@ export function createCLI<const R extends Registry>(registry: R & { [P in keyof 
     for (const key of Object.keys(input)) {
       if (key !== 'params' && key !== 'options' && key !== 'args') throw new ValidationError('unknown invocation field')
     }
-    const params = decodeArguments(command.params, Object.prototype.hasOwnProperty.call(input, 'params') && input.params !== undefined ? input.params : {}, 'argument', false, command.validateParams)
-    const options = decodeArguments(command.options, Object.prototype.hasOwnProperty.call(input, 'options') && input.options !== undefined ? input.options : {}, 'option', false, command.validateOptions)
+    const params = decodeArguments(command.params, Object.prototype.hasOwnProperty.call(input, 'params') && input.params !== undefined ? input.params : {}, 'argument', command.validateParams)
+    const options = decodeArguments(command.options, Object.prototype.hasOwnProperty.call(input, 'options') && input.options !== undefined ? input.options : {}, 'option', command.validateOptions)
     const args = decodeArguments(byPath.get(path)!.args, Object.prototype.hasOwnProperty.call(input, 'args') && input.args !== undefined ? input.args : {}, 'argument')
     const ctx = await context(createIO(execution.io ?? memoryPorts()), execution.signal ?? new AbortController().signal)
     const result = await dispatch(command, params, options, args, ctx)
@@ -448,9 +463,9 @@ export function createCLI<const R extends Registry>(registry: R & { [P in keyof 
       })
       const trailing: Record<string, string | string[] | undefined> = {}
       selected.args.forEach((arg, index) => { trailing[arg.name] = arg.variadic ? candidate.tokens.words.slice(candidate.segments.length + index) : candidate.tokens.words[candidate.segments.length + index] })
-      const params = decodeArguments(selected.params, supplied, 'argument', true, selected.validateParams)
-      const options = decodeArguments(selected.options, candidate.tokens.options, 'option', true, selected.validateOptions)
-      const args = decodeArguments(candidate.args, trailing, 'argument', true)
+      const params = decodeShellArguments(selected.params, supplied, 'argument', selected.validateParams)
+      const options = decodeShellArguments(selected.options, candidate.tokens.options, 'option', selected.validateOptions)
+      const args = decodeShellArguments(candidate.args, trailing, 'argument')
       // Keep handler errors separate from input errors, including ValidationError thrown by a handler.
       try {
         const ctx = await context(io, signal, answers)

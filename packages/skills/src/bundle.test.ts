@@ -2,7 +2,7 @@ import { test, expect } from 'bun:test'
 import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { tmpdir } from 'node:os'
-import { discoverSkills } from './bundle.ts'
+import { discoverSkills, parseSkillGroups } from './bundle.ts'
 
 async function fixture(run) {
   const root = await mkdtemp(
@@ -26,6 +26,25 @@ async function fixture(run) {
     await rm(root, { recursive: true, force: true })
   }
 }
+
+test.each([
+  null,
+  [],
+  { starter: { description: 'Starter', skills: [] } },
+  { starter: { description: 1, skills: ['test-skill'] } },
+  { starter: { description: 'Starter', skills: [['test-skill']] } },
+  { starter: { description: 'Starter', skills: ['test-skill', 'test-skill'] } },
+  { starter: { description: 'Starter', skills: ['test-skill'], extra: true } },
+].map(groups => ({ groups })))('rejects invalid skill group contracts: %j', ({ groups }) => {
+  expect(() => parseSkillGroups(groups)).toThrow()
+})
+
+test('parses skill groups into independent validated member lists', () => {
+  const skills = ['test-skill']
+  const groups = parseSkillGroups({ starter: { description: 'Starter', skills } })
+  skills.push('unvalidated-change')
+  expect(groups).toEqual({ starter: { description: 'Starter', skills: ['test-skill'] } })
+})
 
 test('discovers only explicit skill children and bundles binary resources deterministically', () =>
   fixture(async root => {
